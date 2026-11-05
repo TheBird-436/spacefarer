@@ -1,534 +1,847 @@
-/* ── Reset & Variables ── */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-:root {
-    --accent: #324ab2;
-    --accent-glow: rgba(50, 74, 178, 0.5);
-    --accent-bright: #4f68d9;
-    --bg: #030712;
-    --card-bg: rgba(8, 16, 36, 0.88);
-    --border: rgba(50, 74, 178, 0.25);
-    --glass: rgba(255, 255, 255, 0.04);
-    --radius: 1.5rem;
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  AUDIO FX
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+class AudioFX {
+    constructor() {
+        this.ctx = null;
+        this.enabled = true;
+    }
+    init() {
+        if (!this.ctx) {
+            this.ctx = new(window.AudioContext || window.webkitAudioContext)();
+        }
+    }
+    play(freq = 440, type = 'sine', dur = 0.15, vol = 0.08) {
+        if (!this.enabled) return;
+        this.init();
+        try {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+            gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + dur);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start();
+            osc.stop(this.ctx.currentTime + dur);
+        } catch (_) {}
+    }
+    warp() {
+        if (!this.enabled) return;
+        this.init();
+        try {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(120, this.ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(900, this.ctx.currentTime + 0.35);
+            gain.gain.setValueAtTime(0.05, this.ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + 0.4);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start();
+            osc.stop(this.ctx.currentTime + 0.4);
+        } catch (_) {}
+    }
+    success() {
+        this.play(880, 'triangle', 0.2, 0.06);
+        setTimeout(() => this.play(1100, 'triangle', 0.25, 0.05), 150);
+    }
+    error() {
+        this.play(200, 'sawtooth', 0.3, 0.05);
+    }
+    click() {
+        this.play(600, 'sine', 0.08, 0.04);
+    }
 }
-html { scroll-behavior: smooth; }
-body {
-    font-family: 'Inter', sans-serif;
-    background: var(--bg);
-    color: #f3f4f6;
-    min-height: 100vh;
-    overflow-x: hidden;
-    user-select: none;
-}
-::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 4px; }
+const audio = new AudioFX();
 
-/* ── Canvas Background ── */
-#bg-canvas { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  PLANET DATA
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const PLANETS = [{
+    name: "Mercury", symbol: "☿", tagline: "The Swift Messenger", index: 1, type: "Terrestrial",
+    fact: "Mercury has the shortest orbital year (88 days) and travels through space at an astonishing 47 km/s.",
+    facts: ["Surface temperatures swing from -180°C at night to 430°C in daylight.", "Has no substantial atmosphere, leaving its surface heavily cratered.", "A huge iron core accounts for nearly 85% of the planet's radius."],
+    image: "https://upload.wikimedia.org/wikipedia/commons/4/4a/Mercury_in_true_color.jpg", color: "#94a3b8", glow: "rgba(148,163,184,0.4)",
+    diameterNum: 4879, diameter: "4,879 km", moons: "0 moons", year: "88 Earth days", temp: "430°C / -180°C", gravity: "3.7 m/s²", distance: "57.9M km",
+    moonsList: [], atmosphere: "Trace Exosphere (Helium, Sodium, Oxygen)", composition: "Metallic iron core, silicate mantle & crust",
+    quiz: [{ q: "How fast does Mercury orbit the Sun?", options: ["~47 km/s", "~12 km/s", "~100 km/s"], answer: 0 }, { q: "What % of Mercury's radius is its iron core?", options: ["25%", "50%", "85%"], answer: 2 }]
+}, {
+    name: "Venus", symbol: "♀", tagline: "The Veiled Inferno", index: 2, type: "Terrestrial",
+    fact: "Venus spins backwards and one day is longer than its year.",
+    facts: ["Hottest planet (465°C avg) due to runaway CO₂ greenhouse effect.", "Surface pressure equals being 900m underwater on Earth.", "Thick sulfuric-acid clouds obscure a volcanic surface."],
+    image: "https://upload.wikimedia.org/wikipedia/commons/e/e5/Venus-real_color.jpg", color: "#e8c97a", glow: "rgba(232,201,122,0.4)",
+    diameterNum: 12104, diameter: "12,104 km", moons: "0 moons", year: "225 Earth days", temp: "465°C", gravity: "8.87 m/s²", distance: "108.2M km",
+    moonsList: [], atmosphere: "96.5% CO₂, 3.5% Nitrogen", composition: "Iron core, rocky mantle, volcanic crust",
+    quiz: [{ q: "Why is Venus hotter than Mercury?", options: ["Stronger Solar Flares", "Runaway CO₂ Greenhouse", "Internal Nuclear Core"], answer: 1 }]
+}, {
+    name: "Earth", symbol: "♁", tagline: "The Blue Oasis", index: 3, type: "Terrestrial",
+    fact: "Earth is the densest planet and the only world confirmed to sustain life.",
+    facts: ["A powerful magnetosphere shields life from solar radiation.", "Active plate tectonics continuously recycle the crust.", "Our large moon stabilizes the axial tilt, preventing extreme swings."],
+    image: "https://upload.wikimedia.org/wikipedia/commons/9/97/The_Earth_seen_from_Apollo_17.jpg", color: "#38bdf8", glow: "rgba(56,189,248,0.4)",
+    diameterNum: 12742, diameter: "12,742 km", moons: "1 moon", year: "365.25 days", temp: "15°C avg", gravity: "9.81 m/s²", distance: "149.6M km",
+    moonsList: ["The Moon (Luna)"], atmosphere: "78% N₂, 21% O₂, 1% Ar", composition: "Solid inner iron core, liquid outer iron core, silicate mantle & crust",
+    quiz: [{ q: "What protects Earth's surface from cosmic rays?", options: ["Ozone Layer", "Magnetosphere", "Ocean Currents"], answer: 1 }]
+}, {
+    name: "Mars", symbol: "♂", tagline: "The Red Frontier", index: 4, type: "Terrestrial",
+    fact: "Mars hosts Olympus Mons, a volcano three times taller than Everest.",
+    facts: ["Iron oxide (rust) gives Mars its iconic red colour.", "Valles Marineris is a canyon system spanning a quarter of the planet.", "Two tiny irregular moons are likely captured asteroids."],
+    image: "https://upload.wikimedia.org/wikipedia/commons/0/02/OSIRIS_Mars_true_color.jpg", color: "#f87171", glow: "rgba(248,113,113,0.4)",
+    diameterNum: 6779, diameter: "6,779 km", moons: "2 moons", year: "687 Earth days", temp: "-65°C avg", gravity: "3.72 m/s²", distance: "227.9M km",
+    moonsList: ["Phobos", "Deimos"], atmosphere: "95% CO₂, 2.6% N₂, 1.9% Ar", composition: "Dense iron/sulfur core, silicate mantle, basaltic crust",
+    quiz: [{ q: "How tall is Olympus Mons?", options: ["8 km", "25 km", "50 km"], answer: 1 }]
+}, {
+    name: "Jupiter", symbol: "♃", tagline: "The Gas Titan", index: 5, type: "Gas Giant",
+    fact: "Jupiter is more massive than all other planets combined.",
+    facts: ["The Great Red Spot is a storm wider than Earth that has raged for centuries.", "Has the fastest rotation — under 10 hours for one day.", "Its magnetic field extends nearly 7 million km toward the Sun."],
+    image: "https://upload.wikimedia.org/wikipedia/commons/e/e2/Jupiter.jpg", color: "#fb923c", glow: "rgba(251,146,60,0.4)",
+    diameterNum: 139820, diameter: "139,820 km", moons: "95 moons", year: "11.9 Earth yrs", temp: "-110°C avg", gravity: "24.79 m/s²", distance: "778.5M km",
+    moonsList: ["Io", "Europa", "Ganymede", "Callisto", "Amalthea"], atmosphere: "89% H₂, 10% He", composition: "Liquid metallic hydrogen layers around a rocky/ice core",
+    quiz: [{ q: "How long is a day on Jupiter?", options: ["~10 Hours", "24 Hours", "7 Days"], answer: 0 }]
+}, {
+    name: "Saturn", symbol: "♄", tagline: "The Ringed Sovereign", index: 6, type: "Gas Giant",
+    fact: "Saturn's rings span 282,000 km but are only ~10 m thick.",
+    facts: ["Least dense planet — it could float in water.", "Titan has a thick nitrogen atmosphere and methane lakes.", "A bizarre hexagonal storm swirls around the north pole."],
+    image: "https://upload.wikimedia.org/wikipedia/commons/c/c7/Saturn_during_Equinox.jpg", color: "#fde047", glow: "rgba(253,224,71,0.4)",
+    diameterNum: 116460, diameter: "116,460 km", moons: "146 moons", year: "29.5 Earth yrs", temp: "-140°C avg", gravity: "10.44 m/s²", distance: "1.43B km",
+    moonsList: ["Titan", "Enceladus", "Mimas", "Rhea", "Iapetus", "Dione"], atmosphere: "96% H₂, 3% He", composition: "Liquid hydrogen & helium wrapping a rocky core",
+    quiz: [{ q: "What's unique about Saturn's density?", options: ["Density lower than water", "Zero gravity", "Solid gold core"], answer: 0 }]
+}, {
+    name: "Uranus", symbol: "⛢", tagline: "The Sideways Realm", index: 7, type: "Ice Giant",
+    fact: "Uranus rotates tilted at 98°, giving 21-year-long seasons.",
+    facts: ["Methane gas gives it a pristine cyan colour.", "Holds the record for coldest atmospheric temp (-224°C).", "Has 13 dark, faint planetary rings."],
+    image: "https://upload.wikimedia.org/wikipedia/commons/3/3d/Uranus2.jpg", color: "#22d3ee", glow: "rgba(34,211,238,0.4)",
+    diameterNum: 50724, diameter: "50,724 km", moons: "28 moons", year: "84 Earth yrs", temp: "-195°C avg", gravity: "8.87 m/s²", distance: "2.87B km",
+    moonsList: ["Titania", "Oberon", "Umbriel", "Ariel", "Miranda"], atmosphere: "83% H₂, 15% He, 2% CH₄", composition: "Hot dense mantle of water, ammonia & methane ice around a rocky core",
+    quiz: [{ q: "What's unusual about Uranus's rotation?", options: ["It rotates sideways (98° tilt)", "It does not rotate", "It changes direction yearly"], answer: 0 }]
+}, {
+    name: "Neptune", symbol: "♆", tagline: "The Windswept Abyss", index: 8, type: "Ice Giant",
+    fact: "Neptune has the fastest winds in the solar system — 2,100 km/h.",
+    facts: ["Takes 165 Earth years to orbit the Sun.", "Triton has cryovolcanoes spouting nitrogen ice.", "Radiates 2.6× more internal heat than it receives from the Sun."],
+    image: "https://upload.wikimedia.org/wikipedia/commons/5/56/Neptune_Full.jpg", color: "#324ab2", glow: "rgba(50,74,178,0.6)",
+    diameterNum: 49244, diameter: "49,244 km", moons: "16 moons", year: "165 Earth yrs", temp: "-200°C avg", gravity: "11.15 m/s²", distance: "4.50B km",
+    moonsList: ["Triton", "Proteus", "Nereid", "Larissa"], atmosphere: "80% H₂, 19% He, 1% CH₄", composition: "Fluid mantle of water, ammonia & methane ice over a rocky silicate core",
+    quiz: [{ q: "How fast are Neptune's winds?", options: ["500 km/h", "1,200 km/h", "2,100 km/h"], answer: 2 }]
+}];
 
-/* ── App Shell ── */
-#app {
-    position: relative;
-    z-index: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    max-width: 1024px;
-    margin: 0 auto;
-    padding: 1.5rem 1rem 2.5rem;
-    gap: 1.4rem;
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  STATE & STARFIELD
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+let currentIndex = null;
+let visited = new Set();
+let xp = 0;
+let level = 1;
+
+const canvas = document.getElementById("bg-canvas");
+const ctx = canvas.getContext("2d");
+let stars = [];
+
+function resizeCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    initStars();
 }
 
-/* ── Header ── */
-header { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; text-align: center; width: 100%; }
-#badge {
-    display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.3rem 1.2rem;
-    border-radius: 999px; border: 1px solid var(--accent-glow); background: rgba(50, 74, 178, 0.12);
-    font-family: 'Orbitron', monospace; font-size: 0.6rem; letter-spacing: 0.25em;
-    text-transform: uppercase; color: #8fa3ff; box-shadow: 0 0 20px var(--accent-glow); backdrop-filter: blur(4px);
-}
-#badge-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-bright); animation: pulse-dot 2s ease-in-out infinite; }
-@keyframes pulse-dot { 0%, 100% { opacity: 0.3; transform: scale(1); } 50% { opacity: 1; transform: scale(1.5); } }
-h1 {
-    font-family: 'Orbitron', monospace; font-size: clamp(2.4rem, 8vw, 4.2rem); font-weight: 900;
-    letter-spacing: 0.06em; background: linear-gradient(135deg, #a5b4fc, #324ab2, #38bdf8);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-align: center;
-    line-height: 1.05; filter: drop-shadow(0 0 30px rgba(50, 74, 178, 0.4));
-}
-#subtitle { font-size: 0.8rem; font-weight: 300; letter-spacing: 0.1em; color: #64748b; text-align: center; margin-top: -0.2rem; }
-
-/* ── Toolbar ── */
-#toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center; width: 100%; }
-.tool-btn {
-    background: rgba(50, 74, 178, 0.07); border: 1px solid var(--border); color: #cbd5e1;
-    font-family: 'Orbitron', monospace; font-size: 0.55rem; letter-spacing: 0.1em;
-    text-transform: uppercase; padding: 0.5rem 1rem; border-radius: 999px; cursor: pointer;
-    transition: all 0.25s ease; backdrop-filter: blur(8px); display: inline-flex;
-    align-items: center; gap: 0.35rem; white-space: nowrap;
-}
-.tool-btn:hover { background: rgba(50, 74, 178, 0.22); border-color: var(--accent-bright); transform: translateY(-2px); box-shadow: 0 4px 18px rgba(50, 74, 178, 0.25); }
-.tool-btn:active { transform: scale(0.96); }
-#game-btn { margin-left: auto; }
-
-/* ── XP Bar ── */
-#xp-container {
-    display: flex; align-items: center; gap: 0.8rem; width: 100%;
-    background: rgba(8, 16, 36, 0.7); padding: 0.5rem 1rem; border-radius: 12px;
-    border: 1px solid var(--border); backdrop-filter: blur(4px);
-}
-#xp-label { font-family: 'Orbitron', monospace; font-size: 0.6rem; letter-spacing: 0.1em; color: #94a3b8; white-space: nowrap; min-width: 60px; }
-#xp-bar-outer { flex: 1; height: 6px; border-radius: 4px; background: rgba(255, 255, 255, 0.06); overflow: hidden; position: relative; }
-#xp-bar-inner { height: 100%; width: 0%; border-radius: 4px; background: linear-gradient(90deg, #324ab2, #38bdf8); transition: width 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); box-shadow: 0 0 16px var(--accent-glow); }
-#xp-level { font-family: 'Orbitron', monospace; font-size: 0.55rem; letter-spacing: 0.1em; color: #64748b; white-space: nowrap; min-width: 36px; }
-
-/* ── Navigator ── */
-#navigator { display: flex; flex-wrap: wrap; gap: 0.45rem; justify-content: center; width: 100%; }
-.nav-btn {
-    position: relative; display: flex; flex-direction: column; align-items: center; gap: 1px;
-    padding: 0.45rem 0.6rem; border-radius: 0.75rem; border: 1px solid var(--border);
-    background: rgba(8, 16, 36, 0.5); cursor: pointer; transition: all 0.3s ease;
-    font-family: 'Orbitron', monospace; min-width: 58px; backdrop-filter: blur(4px);
-}
-.nav-btn:hover { background: rgba(50, 74, 178, 0.18); border-color: var(--accent-bright); transform: translateY(-2px); }
-.nav-btn.active { background: rgba(50, 74, 178, 0.35); border-color: var(--accent-bright); box-shadow: 0 0 20px var(--accent-glow); transform: translateY(-2px); }
-.nav-btn .nav-symbol { font-size: 1rem; color: #94a3b8; transition: color 0.3s; }
-.nav-btn.active .nav-symbol { color: #fff; }
-.nav-btn .nav-name { font-size: 0.5rem; letter-spacing: 0.08em; text-transform: uppercase; color: #64748b; transition: color 0.3s; }
-.nav-btn.active .nav-name { color: #c7d2fe; }
-.nav-visited-dot { position: absolute; top: 3px; right: 3px; width: 5px; height: 5px; border-radius: 50%; background: #38bdf8; display: none; box-shadow: 0 0 8px #38bdf8; }
-.nav-btn.visited .nav-visited-dot { display: block; }
-.nav-btn .nav-ring { position: absolute; inset: -3px; border-radius: 0.9rem; border: 1.5px solid transparent; pointer-events: none; transition: border-color 0.4s; }
-.nav-btn.active .nav-ring { border-color: var(--accent-bright); }
-
-/* ── Planet Layout & Side Panel ── */
-#planet-layout { display: flex; flex-direction: column; gap: 0.85rem; width: 100%; }
-#spacefarer-panel {
-    display: flex; flex-direction: column; gap: 1rem; min-width: 0; width: 100%;
-    padding: 1.15rem; border: 1px solid var(--border); border-radius: var(--radius);
-    background: var(--card-bg); backdrop-filter: blur(18px);
-    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.45);
-}
-.panel-indicators { display: flex; flex-wrap: wrap; gap: 0.5rem; padding-bottom: 0.85rem; border-bottom: 1px solid var(--border); }
-.panel-indicator {
-    display: flex; align-items: center; gap: 0.55rem; color: #94a3b8;
-    font-family: 'Orbitron', monospace; font-size: 0.5rem; letter-spacing: 0.08em;
-    padding: 0.45rem 0.65rem; border: 1px solid var(--border); border-radius: 999px;
-    background: rgba(50, 74, 178, 0.07); cursor: pointer; transition: all 0.25s ease;
-}
-.panel-indicator:hover, .panel-indicator:focus-visible, .panel-indicator[aria-pressed="true"] {
-    color: #e2e8f0; background: rgba(50, 74, 178, 0.2); border-color: var(--accent-bright);
-    box-shadow: 0 0 14px rgba(50, 74, 178, 0.22);
-}
-.panel-indicator:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 2px; }
-.panel-dot { flex: 0 0 8px; width: 8px; height: 8px; border-radius: 50%; }
-.today-dot { background: #ff334f; box-shadow: 0 0 7px #ff334f, 0 0 14px rgba(255, 51, 79, 0.7); }
-.update-dot { background: #38bdf8; box-shadow: 0 0 7px #38bdf8, 0 0 14px rgba(56, 189, 248, 0.65); }
-.panel-section h2 { margin-bottom: 0.4rem; color: #c7d2fe; font-family: 'Orbitron', monospace; font-size: 0.62rem; letter-spacing: 0.08em; text-transform: uppercase; }
-.panel-section p { color: #cbd5e1; font-size: 0.8rem; line-height: 1.7; }
-.panel-section[hidden] { display: none; }
-.panel-section .panel-tagline { margin-top: 0.25rem; color: #8190ad; font-family: 'Orbitron', monospace; font-size: 0.58rem; letter-spacing: 0.04em; }
-.panel-section .panel-fact { margin-top: 0.65rem; padding-left: 0.65rem; border-left: 2px solid var(--accent-bright); }
-
-@media (min-width: 1440px) {
-    #app { width: calc(100vw - 592px); max-width: 1024px; }
-    #spacefarer-panel {
-        position: fixed; z-index: 5; top: 50%; right: 0; width: 272px;
-        max-height: calc(100vh - 2rem); overflow-y: auto; transform: translateY(-50%);
+function initStars() {
+    stars = [];
+    const count = Math.floor((canvas.width * canvas.height) / 2600);
+    for (let i = 0; i < count; i++) {
+        stars.push({
+            x: Math.random() * canvas.width, y: Math.random() * canvas.height,
+            size: Math.random() * 2 + 0.4, alpha: Math.random() * 0.8 + 0.2,
+            speed: Math.random() * 0.008 + 0.003, drift: Math.random() * 0.0004 - 0.0002
+        });
     }
 }
 
-/* ── Planet Card ── */
-#planet-card {
-    width: 100%; border-radius: var(--radius); border: 1px solid var(--border);
-    background: var(--card-bg); backdrop-filter: blur(18px); min-height: 440px;
-    display: flex; align-items: center; justify-content: center; overflow: hidden;
-    position: relative; transition: border-color 0.8s ease, box-shadow 0.8s ease;
-    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
+function animateStars() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    stars.forEach(s => {
+        s.alpha += s.speed * (Math.sin(Date.now() * s.drift * 10) * 0.5 + 0.5);
+        if (s.alpha > 1) s.alpha = 1;
+        if (s.alpha < 0.05) s.alpha = 0.05;
+        const a = 0.15 + 0.85 * s.alpha;
+        ctx.fillStyle = `rgba(224, 231, 255, ${a})`;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    requestAnimationFrame(animateStars);
+}
+window.addEventListener("resize", resizeCanvas);
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  PARTICLES & UI REFS
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function burstParticles(x, y, color, count = 40) {
+    const container = document.getElementById("particles");
+    for (let i = 0; i < count; i++) {
+        const p = document.createElement("div");
+        p.className = "particle";
+        const size = Math.random() * 6 + 2;
+        const angle = Math.random() * Math.PI * 2;
+        const dist = Math.random() * 180 + 60;
+        const tx = Math.cos(angle) * dist;
+        const ty = Math.sin(angle) * dist;
+        const dur = Math.random() * 0.8 + 0.5;
+        p.style.cssText = `left:${x}px; top:${y}px; width:${size}px; height:${size}px; background:${color}; --tx:${tx}px; --ty:${ty}px; --dur:${dur}s; box-shadow: 0 0 ${size * 2}px ${color};`;
+        container.appendChild(p);
+        setTimeout(() => p.remove(), dur * 1000);
+    }
 }
 
-/* ── Orbital Rings ── */
-.orbital-ring { position: absolute; top: 50%; left: 50%; border-radius: 50%; border: 1px dashed currentColor; opacity: 0.15; pointer-events: none; transform: translate(-50%, -50%); animation: orbit-spin var(--ospeed) linear infinite; }
-@keyframes orbit-spin { from { transform: translate(-50%, -50%) rotate(0deg); } to { transform: translate(-50%, -50%) rotate(360deg); } }
+const nav = document.getElementById("navigator");
+const card = document.getElementById("planet-card");
+const idleEl = document.getElementById("idle");
+const loadingEl = document.getElementById("loading");
+const contentEl = document.getElementById("planet-content");
+const imgEl = document.getElementById("planet-img");
+const glowEl = document.getElementById("glow-outer");
+const ring1 = document.getElementById("ring1");
+const ring2 = document.getElementById("ring2");
+const ring3 = document.getElementById("ring3");
+const discoverBtn = document.getElementById("discover-btn");
+const overlay = document.getElementById("overlay");
+const modalBody = document.getElementById("modal-body");
+const xpLabel = document.getElementById("xp-label");
+const xpBar = document.getElementById("xp-bar-inner");
+const xpLevel = document.getElementById("xp-level");
 
-/* ── Idle State ── */
-#idle { display: flex; flex-direction: column; align-items: center; gap: 1rem; padding: 2rem; }
-#idle-ring { width: 7rem; height: 7rem; border-radius: 50%; border: 1.5px dashed rgba(50, 74, 178, 0.3); display: flex; align-items: center; justify-content: center; animation: orbit-spin 18s linear infinite; }
-#idle-center { width: 2.4rem; height: 2.4rem; border-radius: 50%; border: 1.5px solid var(--accent-bright); display: flex; align-items: center; justify-content: center; box-shadow: 0 0 24px var(--accent-glow); background: rgba(50, 74, 178, 0.08); }
-#idle-dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; background: #8fa3ff; animation: pulse-dot 1.8s ease-in-out infinite; }
-#idle-label { font-family: 'Orbitron', monospace; font-size: 0.7rem; letter-spacing: 0.3em; text-transform: uppercase; color: #94a3b8; }
-#idle-sub { font-size: 0.75rem; color: #64748b; margin-top: -0.3rem; }
-
-/* ── Loading ── */
-#loading { display: none; position: absolute; inset: 0; flex-direction: column; align-items: center; justify-content: center; gap: 1.2rem; background: var(--card-bg); z-index: 10; backdrop-filter: blur(12px); border-radius: var(--radius); }
-#spinner { width: 3.6rem; height: 3.6rem; border-radius: 50%; border: 2.5px solid transparent; border-top-color: var(--accent-bright); border-right-color: #38bdf8; animation: orbit-spin 0.7s linear infinite; }
-#scanning-label { font-family: 'Orbitron', monospace; font-size: 0.6rem; letter-spacing: 0.3em; color: #94a3b8; }
-
-/* ── Planet Content ── */
-#planet-content { display: none; width: 100%; flex-direction: column; z-index: 2; animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-@media (min-width: 640px) { #planet-content { flex-direction: row; } }
-@keyframes fadeUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
-
-#planet-left { display: flex; align-items: center; justify-content: center; padding: 2rem 1.5rem; position: relative; flex-shrink: 0; }
-@media (min-width: 640px) { #planet-left { width: 42%; padding: 2.5rem 1.5rem; } }
-#planet-img-wrap { position: relative; flex-shrink: 0; cursor: pointer; transition: transform 0.3s ease; }
-#planet-img-wrap:hover { transform: scale(1.03); }
-#glow-outer { position: absolute; inset: -35%; border-radius: 50%; animation: glow-pulse 5s ease-in-out infinite; filter: blur(30px); opacity: 0.5; transition: background 0.8s ease; }
-@keyframes glow-pulse { 0%, 100% { transform: scale(1); opacity: 0.4; } 50% { transform: scale(1.15); opacity: 0.7; } }
-#planet-img { position: relative; z-index: 1; width: 10rem; height: 10rem; border-radius: 50%; object-fit: cover; display: block; transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow: inset -12px -12px 28px rgba(0, 0, 0, 0.8), 0 8px 40px rgba(0, 0, 0, 0.5); border: 2px solid rgba(255, 255, 255, 0.06); }
-@media (min-width: 480px) { #planet-img { width: 12rem; height: 12rem; } }
-#planet-img-wrap:hover #planet-img { transform: scale(1.05) rotate(2deg); }
-
-#type-badge { position: absolute; bottom: -0.6rem; left: 50%; transform: translateX(-50%); padding: 0.2rem 0.8rem; border-radius: 999px; font-family: 'Orbitron', monospace; font-size: 0.5rem; letter-spacing: 0.2em; text-transform: uppercase; border: 1px solid; white-space: nowrap; z-index: 3; background: #060b18; backdrop-filter: blur(4px); }
-
-#planet-right { display: flex; flex-direction: column; justify-content: center; gap: 0.8rem; padding: 1rem 1.5rem 1.8rem; }
-@media (min-width: 640px) { #planet-right { width: 58%; padding: 2rem 2.5rem 2rem 0.5rem; } }
-#planet-meta { font-family: 'Orbitron', monospace; font-size: 0.55rem; letter-spacing: 0.3em; text-transform: uppercase; color: #64748b; }
-#planet-name { font-family: 'Orbitron', monospace; font-size: clamp(1.8rem, 5vw, 2.8rem); font-weight: 900; letter-spacing: 0.04em; line-height: 1; color: #f3f4f6; }
-#planet-tagline { font-family: 'Orbitron', monospace; font-size: 0.6rem; letter-spacing: 0.18em; color: #64748b; margin-top: 0.1rem; }
-#planet-fact { font-size: 0.85rem; font-weight: 300; line-height: 1.6; color: #e2e8f0; border-left: 2.5px solid; padding-left: 0.85rem; transition: border-color 0.4s; }
-#stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem; }
-.stat-pill { display: flex; flex-direction: column; align-items: center; gap: 0.1rem; padding: 0.5rem 0.3rem; border-radius: 0.6rem; background: rgba(50, 74, 178, 0.08); border: 1px solid var(--border); }
-.stat-label { font-family: 'Orbitron', monospace; font-size: 0.42rem; letter-spacing: 0.1em; text-transform: uppercase; color: #64748b; white-space: nowrap; }
-.stat-value { font-size: 0.7rem; font-weight: 600; color: #f3f4f6; text-align: center; line-height: 1.2; }
-#didyouknow { border-radius: 0.6rem; padding: 0.7rem 0.9rem; border: 1px solid; font-size: 0.78rem; color: #e2e8f0; line-height: 1.5; transition: border-color 0.4s, background 0.4s; }
-#dyk-label { font-family: 'Orbitron', monospace; font-size: 0.5rem; letter-spacing: 0.2em; text-transform: uppercase; display: block; margin-bottom: 0.15rem; color: var(--accent-bright); }
-#action-btns { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.1rem; }
-.action-btn { font-family: 'Orbitron', monospace; font-size: 0.5rem; letter-spacing: 0.12em; text-transform: uppercase; padding: 0.45rem 0.8rem; border-radius: 0.6rem; background: rgba(50, 74, 178, 0.08); border: 1px solid var(--border); color: #e2e8f0; cursor: pointer; transition: all 0.25s ease; backdrop-filter: blur(4px); }
-.action-btn:hover { background: rgba(50, 74, 178, 0.25); border-color: var(--accent-bright); transform: translateY(-2px); box-shadow: 0 4px 16px rgba(50, 74, 178, 0.2); }
-.action-btn:active { transform: scale(0.95); }
-
-/* ── Discover Button ── */
-#discover-btn { font-family: 'Orbitron', monospace; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: #fff; padding: 1rem 2.8rem; border: none; border-radius: 1rem; cursor: pointer; background: linear-gradient(135deg, #324ab2, #1a264a); border: 1px solid var(--accent-bright); box-shadow: 0 0 30px var(--accent-glow), 0 8px 30px rgba(0, 0, 0, 0.5); transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); position: relative; overflow: hidden; }
-#discover-btn::after { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, transparent 40%, rgba(255, 255, 255, 0.06) 100%); pointer-events: none; }
-#discover-btn:hover { box-shadow: 0 0 60px rgba(50, 74, 178, 0.6), 0 10px 40px rgba(0, 0, 0, 0.6); transform: translateY(-4px) scale(1.02); background: linear-gradient(135deg, #4f68d9, #324ab2); }
-#discover-btn:active { transform: translateY(0) scale(0.97); }
-
-/* ── Overlay / Modal ── */
-.overlay { position: fixed; inset: 0; z-index: 100; background: rgba(3, 7, 18, 0.88); backdrop-filter: blur(12px); display: flex; align-items: center; justify-content: center; padding: 1rem; opacity: 0; pointer-events: none; transition: opacity 0.35s ease; }
-.overlay.active { opacity: 1; pointer-events: auto; }
-.modal { background: #080d1a; border: 1px solid var(--border); border-radius: 1.25rem; max-width: 640px; width: 100%; max-height: 85vh; overflow-y: auto; padding: 2rem 1.75rem; position: relative; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.9), 0 0 40px var(--accent-glow); transform: scale(0.94) translateY(12px); transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1); }
-.overlay.active .modal { transform: scale(1) translateY(0); }
-.modal-close { position: absolute; top: 1rem; right: 1rem; background: rgba(50, 74, 178, 0.08); border: 1px solid var(--border); color: #94a3b8; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; cursor: pointer; transition: all 0.25s; font-family: 'Inter', sans-serif; }
-.modal-close:hover { color: #fff; background: rgba(50, 74, 178, 0.3); border-color: var(--accent-bright); }
-.modal h2 { font-family: 'Orbitron', monospace; font-size: 1.1rem; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 1.2rem; color: #f3f4f6; }
-
-/* ── Full-page About view ── */
-body.about-open { overflow: hidden; }
-body.about-open #app { display: none; }
-.about-page[hidden] { display: none; }
-.about-page { position: fixed; inset: 0; z-index: 200; overflow-y: auto; padding: clamp(1rem, 3vw, 2.5rem); background: radial-gradient(ellipse at 50% 0%, rgba(50, 74, 178, 0.19), transparent 58%), linear-gradient(180deg, rgba(3, 7, 18, 0.96), rgba(3, 7, 18, 0.99)); backdrop-filter: blur(16px); }
-.about-page__inner { display: flex; flex-direction: column; width: min(100%, 1080px); min-height: calc(100vh - 2 * clamp(1rem, 3vw, 2.5rem)); margin: 0 auto; }
-.about-page__back { position: sticky; top: 0.5rem; z-index: 1; align-self: flex-start; margin: 0 0 1.5rem; padding: 0.65rem 0.9rem; border: 1px solid var(--border); border-radius: 999px; background: rgba(8, 16, 36, 0.86); color: #cbd5e1; font: 500 0.8rem 'Inter', sans-serif; cursor: pointer; backdrop-filter: blur(12px); transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease; }
-.about-page__back:hover, .about-page__back:focus-visible { color: #fff; border-color: var(--accent-bright); background: rgba(50, 74, 178, 0.24); }
-.about-page__back:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 3px; }
-.about-page__header { display: flex; flex-direction: column; align-items: flex-start; width: 100%; gap: 1rem; padding: clamp(1rem, 4vw, 3.25rem) 0 2.5rem; border-bottom: 1px solid var(--border); text-align: left; }
-.about-page__eyebrow { color: #8fa3ff; font-family: 'Orbitron', monospace; font-size: 0.64rem; letter-spacing: 0.2em; }
-.about-page__header h1 { width: 100%; font-size: clamp(2.4rem, 7vw, 4.6rem); text-align: left; }
-.about-page__lead { max-width: 760px; color: #cbd5e1; font-size: clamp(1rem, 2vw, 1.25rem); font-weight: 300; line-height: 1.8; }
-.about-page__details { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(1.25rem, 4vw, 3rem); padding: 2.5rem 0; }
-.about-page__details section { padding-top: 1rem; border-top: 2px solid var(--accent-bright); }
-.about-page__details h2 { margin-bottom: 0.8rem; color: #c7d2fe; font-family: 'Orbitron', monospace; font-size: 0.9rem; letter-spacing: 0.06em; text-transform: uppercase; }
-.about-page__details p { color: #aab6cc; font-size: 0.9rem; line-height: 1.8; }
-.about-page__inner footer { width: 100%; margin-top: auto; padding: 1.5rem 0 0.5rem; border-top: 1px solid var(--border); }
-@media (max-width: 720px) {
-    .about-page__details { grid-template-columns: 1fr; gap: 1.5rem; padding: 2rem 0; }
-    .about-page__header { padding-top: 1rem; }
+function initNav() {
+    nav.innerHTML = "";
+    PLANETS.forEach((p, idx) => {
+        const btn = document.createElement("button");
+        btn.className = "nav-btn";
+        btn.innerHTML = `<div class="nav-visited-dot"></div><div class="nav-ring"></div><span class="nav-symbol">${p.symbol}</span><span class="nav-name">${p.name}</span>`;
+        btn.dataset.index = idx;
+        btn.onclick = () => selectPlanet(idx);
+        nav.appendChild(btn);
+    });
 }
 
-/* ── Badges, Quiz, Scale, Orbit Map, Particles, Footer ── */
-.badge-item { display: flex; align-items: center; gap: 1rem; padding: 0.75rem 1rem; border-radius: 0.75rem; background: rgba(50, 74, 178, 0.04); border: 1px solid var(--border); margin-bottom: 0.5rem; transition: all 0.3s; }
-.badge-item.earned { background: rgba(50, 74, 178, 0.18); border-color: var(--accent-bright); box-shadow: 0 0 20px rgba(50, 74, 178, 0.1); }
-.quiz-option { display: block; width: 100%; text-align: left; padding: 0.75rem 1.1rem; margin: 0.4rem 0; background: rgba(50, 74, 178, 0.06); border: 1px solid var(--border); border-radius: 0.75rem; cursor: pointer; font-size: 0.85rem; color: #e2e8f0; transition: all 0.2s; font-family: 'Inter', sans-serif; }
-.quiz-option:hover:not(:disabled) { background: rgba(50, 74, 178, 0.2); border-color: var(--accent-bright); }
-.quiz-option:disabled { cursor: default; opacity: 0.7; }
-.quiz-option.correct { background: rgba(74, 222, 128, 0.18); border-color: #4ade80; color: #4ade80; }
-.quiz-option.wrong { background: rgba(248, 113, 113, 0.18); border-color: #f87171; color: #f87171; }
+function selectPlanet(idx, skipAudio = false) {
+    if (currentIndex === idx) return;
+    if (!skipAudio) audio.warp();
+    currentIndex = idx;
+    const p = PLANETS[idx];
 
-.scale-row { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.5rem; }
-.scale-label { font-family: 'Orbitron', monospace; font-size: 0.6rem; width: 70px; text-align: right; color: #94a3b8; flex-shrink: 0; }
-.scale-bar-wrap { flex: 1; height: 18px; background: rgba(255, 255, 255, 0.05); border-radius: 10px; overflow: hidden; position: relative; }
-.scale-bar { height: 100%; border-radius: 10px; transition: width 1s cubic-bezier(0.34, 1.56, 0.64, 1); min-width: 4px; }
-.scale-val { position: absolute; right: 8px; top: 1px; font-size: 0.55rem; font-family: 'Orbitron', monospace; color: rgba(255, 255, 255, 0.8); }
+    idleEl.style.display = "none";
+    contentEl.style.display = "none";
+    loadingEl.style.display = "flex";
 
-.orbit-map-item { display: flex; align-items: center; justify-content: space-between; padding: 0.6rem 0.9rem; background: rgba(50, 74, 178, 0.06); border-radius: 0.6rem; border-left: 4px solid; cursor: pointer; transition: all 0.25s; margin-bottom: 0.4rem; }
-.orbit-map-item:hover { background: rgba(50, 74, 178, 0.18); transform: translateX(4px); }
-.orbit-map-item .om-symbol { font-size: 1.1rem; }
-.orbit-map-item .om-name { font-family: 'Orbitron', monospace; font-size: 0.75rem; flex: 1; margin-left: 0.6rem; }
-.orbit-map-item .om-dist { font-size: 0.65rem; color: #94a3b8; font-family: 'Orbitron', monospace; }
+    ring1.style.display = ring2.style.display = ring3.style.display = "block";
+    ring1.style.color = ring2.style.color = ring3.style.color = p.color;
 
-.particle-container { position: fixed; inset: 0; pointer-events: none; z-index: 50; overflow: hidden; }
-.particle { position: absolute; border-radius: 50%; pointer-events: none; animation: particle-fly var(--dur) ease-out forwards; }
-@keyframes particle-fly { 0% { opacity: 1; transform: translate(0, 0) scale(1); } 100% { opacity: 0; transform: translate(var(--tx), var(--ty)) scale(0); } }
+    document.querySelectorAll(".nav-btn").forEach((btn, i) => btn.classList.toggle("active", i === idx));
 
-footer { text-align: center; font-family: 'Orbitron', monospace; font-size: 0.6rem; letter-spacing: 0.2em; color: rgba(255, 243, 218, 1.0); line-height: 1.8; margin-top: 0.5rem; }
+    setTimeout(() => {
+        loadingEl.style.display = "none";
+        contentEl.style.display = "flex";
 
-/* ── Responsive Tweaks ── */
-@media (max-width: 480px) {
-    #app { padding: 1rem 0.6rem 1.5rem; gap: 1rem; }
-    #planet-card { min-height: 380px; }
-    #planet-left { padding: 1.2rem 0.8rem; }
-    #planet-img { width: 7rem; height: 7rem; }
-    #planet-right { padding: 0.5rem 0.8rem 1.2rem; gap: 0.5rem; }
-    #stats { grid-template-columns: repeat(3, 1fr); gap: 0.25rem; }
-    .stat-pill { padding: 0.3rem 0.2rem; }
-    .stat-value { font-size: 0.6rem; }
-    .stat-label { font-size: 0.36rem; }
-    #planet-fact { font-size: 0.75rem; padding-left: 0.6rem; }
-    #didyouknow { font-size: 0.7rem; padding: 0.5rem 0.7rem; }
-    .modal { padding: 1.5rem 1rem; }
-    .tool-btn { font-size: 0.45rem; padding: 0.35rem 0.7rem; }
-    .nav-btn { min-width: 44px; padding: 0.3rem 0.4rem; }
-    .nav-btn .nav-symbol { font-size: 0.8rem; }
-    .nav-btn .nav-name { font-size: 0.4rem; }
-    #discover-btn { font-size: 0.6rem; padding: 0.7rem 1.8rem; }
-    .action-btn { font-size: 0.42rem; padding: 0.35rem 0.6rem; }
-    .scale-label { width: 50px; font-size: 0.5rem; }
-    .scale-bar-wrap { height: 14px; }
-    .scale-val { font-size: 0.45rem; top: 0; }
-}
-@media (min-width: 481px) and (max-width: 640px) {
-    #planet-img { width: 9rem; height: 9rem; }
-    #planet-left { padding: 1.5rem; }
-}
+        imgEl.src = p.image;
+        imgEl.alt = p.name;
+        glowEl.style.background = p.glow;
+        card.style.borderColor = p.glow;
+        card.style.boxShadow = `0 0 40px ${p.glow}`;
 
-/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   STARFALL RUN — MINI-GAME STYLES
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-#game-backdrop { position: fixed; inset: 0; z-index: 149; background: rgba(2, 6, 18, 0.84); backdrop-filter: blur(9px); opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
-#game-backdrop.active { opacity: 1; pointer-events: auto; }
-#game-panel {
-    --sf-panel: rgba(7, 13, 31, 0.98); --sf-card: rgba(11, 19, 42, 0.82); --sf-border: rgba(143, 170, 240, 0.17);
-    --sf-muted: #a5b2d0; --sf-cyan: #67e5ff; position: fixed; top: 50%; left: 50%; z-index: 150;
-    width: min(94vw, 1120px); max-height: min(92dvh, 920px); overflow-y: auto; overscroll-behavior: contain;
-    transform: translate(-50%, -50%) scale(0.97); display: flex; flex-direction: column; color: #edf6ff;
-    background: radial-gradient(ellipse at 78% 2%, rgba(67, 87, 180, 0.12), transparent 34%), var(--sf-panel);
-    border: 1px solid var(--sf-border); border-radius: 24px; box-shadow: 0 34px 100px rgba(0, 0, 0, 0.72), 0 0 48px rgba(77, 117, 255, 0.12);
-    opacity: 0; pointer-events: none; transition: opacity 0.26s ease, transform 0.32s cubic-bezier(0.16, 1, 0.3, 1);
-    scrollbar-color: rgba(121, 153, 215, 0.45) transparent; scrollbar-width: thin;
-}
-#game-panel.active { opacity: 1; pointer-events: auto; transform: translate(-50%, -50%) scale(1); }
-#game-panel:focus { outline: none; }
-.starfall-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; padding: 24px 26px 20px; border-bottom: 1px solid rgba(143, 170, 240, 0.14); }
-.starfall-heading { min-width: 0; }
-.starfall-eyebrow, .starfall-overlay-kicker, .starfall-stat > span, .starfall-card-heading h3, .starfall-card-heading > strong, .starfall-mode, .starfall-control-hints, .starfall-mission-meta, .starfall-runline { font-family: "Orbitron", monospace; letter-spacing: 0.08em; }
-.starfall-eyebrow { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; color: #9fadd0; font-size: 0.59rem; }
-.starfall-eyebrow > span { width: 7px; height: 7px; border-radius: 50%; background: var(--sf-cyan); box-shadow: 0 0 12px rgba(103, 229, 255, 0.9); }
-.starfall-heading h2 { margin: 0; color: #f5f8ff; font-family: "Orbitron", monospace; font-size: clamp(1.4rem, 3vw, 2rem); letter-spacing: 0.065em; line-height: 1.12; }
-.starfall-subtitle { margin: 8px 0 0; color: var(--sf-muted); font-size: 0.82rem; line-height: 1.5; }
-.starfall-header-actions { display: flex; align-items: center; gap: 9px; flex-shrink: 0; }
-.starfall-mode, .starfall-icon-button { display: inline-flex; align-items: center; justify-content: center; min-height: 34px; border: 1px solid var(--sf-border); border-radius: 999px; background: rgba(19, 30, 61, 0.66); color: #d5e3ff; }
-.starfall-mode { gap: 7px; padding: 0 11px; font-size: 0.55rem; white-space: nowrap; }
-.starfall-mode.is-live::before { width: 7px; height: 7px; content: ""; border-radius: 50%; background: #68ffc0; box-shadow: 0 0 10px rgba(104, 255, 192, 0.8); }
-.starfall-icon-button { width: 36px; padding: 0; cursor: pointer; font: 600 0.88rem "Orbitron", monospace; transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease; }
-.starfall-icon-button[hidden] { display: none !important; }
-.starfall-icon-button:hover { color: #fff; border-color: rgba(103, 229, 255, 0.5); background: rgba(44, 66, 124, 0.7); }
-#game-close { border: 1px solid var(--sf-border); color: #d5e3ff; font-size: 1.35rem; }
-.starfall-layout { display: grid; grid-template-columns: minmax(0, 1fr) 258px; align-items: start; gap: 16px; padding: 16px; }
-.starfall-main { min-width: 0; }
-.starfall-hud { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; margin-bottom: 10px; }
-.starfall-stat, .starfall-card { min-width: 0; border: 1px solid rgba(143, 170, 240, 0.14); border-radius: 15px; background: var(--sf-card); }
-.starfall-stat { min-height: 62px; display: flex; flex-direction: column; justify-content: center; gap: 6px; padding: 10px 12px; }
-.starfall-stat > span { color: #93a2c3; font-size: 0.5rem; }
-.starfall-stat > strong { color: #71eaff; font: 700 0.92rem "Orbitron", monospace; line-height: 1.2; }
-.starfall-stat:nth-child(2) > strong { color: #ffd46f; }
-.starfall-stat:nth-child(3) > strong { color: #f3f7ff; white-space: nowrap; }
-.starfall-stat:nth-child(3) > strong span { color: #aab9d7; font-size: 0.63rem; }
-.starfall-stat:nth-child(4) > strong { display: flex; gap: 4px; color: #ff729b; font-size: 1rem; }
-.game-heart.is-lost { color: #47516a; opacity: 0.55; }
-.starfall-arena { position: relative; height: clamp(300px, 47vh, 490px); min-height: 300px; overflow: hidden; border: 1px solid rgba(133, 162, 239, 0.2); border-radius: 17px; background: #070d20; box-shadow: inset 0 0 42px rgba(20, 48, 100, 0.14); }
-.starfall-canvas { display: block; width: 100%; height: 100%; touch-action: none; }
-.starfall-overlay { position: absolute; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(4, 8, 23, 0.4); opacity: 0; pointer-events: none; transition: opacity 0.22s ease; }
-.starfall-overlay.active { opacity: 1; pointer-events: auto; }
-.starfall-overlay-card { width: min(100%, 420px); padding: 28px; border: 1px solid rgba(149, 172, 240, 0.24); border-radius: 20px; background: rgba(8, 15, 36, 0.91); box-shadow: 0 20px 65px rgba(0, 0, 0, 0.32), 0 0 42px rgba(74, 113, 255, 0.08); backdrop-filter: blur(16px); text-align: center; }
-.starfall-overlay-icon { width: 56px; height: 56px; display: grid; place-items: center; margin: 0 auto 17px; border: 1px solid rgba(103, 229, 255, 0.31); border-radius: 17px; background: rgba(51, 119, 167, 0.13); color: var(--sf-cyan); font-size: 1.75rem; box-shadow: inset 0 0 24px rgba(79, 213, 255, 0.06); }
-.starfall-overlay-kicker { margin: 0 0 8px; color: var(--sf-cyan); font-size: 0.55rem; }
-.starfall-overlay-card h3 { margin: 0; color: #f8faff; font: 700 clamp(1.2rem, 3vw, 1.55rem) "Orbitron", monospace; letter-spacing: 0.015em; }
-.starfall-overlay-copy { max-width: 350px; margin: 12px auto 17px; color: #b0bdd9; font-size: 0.8rem; line-height: 1.62; }
-.starfall-control-hints { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px; margin: 0 0 17px; }
-.starfall-control-hints[hidden] { display: none; }
-.starfall-control-hints span { padding: 6px 8px; border: 1px solid rgba(153, 174, 227, 0.2); border-radius: 8px; color: #a9b7d2; font-size: 0.49rem; white-space: nowrap; }
-.starfall-launch-button { min-width: 160px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 12px; padding: 0 18px; border: 1px solid rgba(160, 184, 255, 0.42); border-radius: 12px; background: linear-gradient(135deg, #485ce4, #4e94ea); color: #fff; box-shadow: 0 8px 25px rgba(70, 99, 232, 0.32); cursor: pointer; font: 700 0.62rem "Orbitron", monospace; letter-spacing: 0.07em; text-transform: uppercase; transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease; }
-.starfall-launch-button:hover { transform: translateY(-2px); filter: brightness(1.1); box-shadow: 0 12px 30px rgba(70, 118, 247, 0.42); }
-.starfall-launch-button span { font-size: 1rem; }
-.starfall-toast { position: absolute; top: 16px; left: 50%; z-index: 2; padding: 9px 13px; transform: translate(-50%, -8px); border: 1px solid rgba(103, 229, 255, 0.32); border-radius: 999px; background: rgba(8, 18, 40, 0.88); color: #aaf3ff; font: 700 0.55rem "Orbitron", monospace; letter-spacing: 0.06em; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.2s ease, transform 0.2s ease; }
-.starfall-toast.active { transform: translate(-50%, 0); opacity: 1; }
-.starfall-runline { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 3px 0; color: #8c9bb9; font-size: 0.52rem; }
-.starfall-runline strong { color: #d5e5ff; font-weight: 700; }
-.starfall-sidebar { display: grid; gap: 10px; }
-.starfall-card { padding: 15px; }
-.starfall-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 11px; }
-.starfall-card-heading h3 { margin: 0; color: #e8f1ff; font-size: 0.57rem; }
-.starfall-card-heading > strong { color: var(--sf-cyan); font-size: 0.53rem; white-space: nowrap; }
-.starfall-mission > p:not(.starfall-mission-done) { margin: 0 0 12px; color: #a7b4cf; font-size: 0.72rem; line-height: 1.55; }
-.starfall-progress-track { height: 7px; overflow: hidden; border: 1px solid rgba(158, 179, 229, 0.17); border-radius: 999px; background: rgba(3, 8, 21, 0.7); }
-.starfall-progress-track > span { width: 0; height: 100%; display: block; border-radius: inherit; background: linear-gradient(90deg, #536dff, #69efff); box-shadow: 0 0 12px rgba(102, 223, 255, 0.56); transition: width 0.24s ease; }
-.starfall-mission-meta { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; color: #8594b2; font-size: 0.45rem; }
-.starfall-mission-done { margin: 9px 0 0; color: #84ffd1; font: 700 0.48rem "Orbitron", monospace; letter-spacing: 0.06em; }
-.starfall-mission-done[hidden] { display: none; }
-.starfall-shield-card .starfall-card-heading { margin-bottom: 10px; }
-.starfall-charge-track > span { background: linear-gradient(90deg, #6378ff, #66edff); }
-.starfall-burst-button { width: 100%; min-height: 42px; display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 11px; padding: 0 11px; border: 1px solid rgba(102, 164, 214, 0.2); border-radius: 11px; background: rgba(28, 57, 92, 0.31); color: #aec1e3; cursor: pointer; font: 600 0.52rem "Orbitron", monospace; letter-spacing: 0.045em; transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease; }
-.starfall-burst-button strong { color: #7beaff; font-size: 0.48rem; }
-.starfall-burst-button:disabled { cursor: not-allowed; opacity: 0.72; }
-.starfall-burst-button:not(:disabled) { border-color: rgba(105, 231, 255, 0.58); background: rgba(45, 115, 155, 0.31); color: #edfcff; box-shadow: 0 0 22px rgba(78, 212, 255, 0.12); }
-.starfall-control-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 0; color: #aab6d0; font-size: 0.64rem; }
-.starfall-control-row kbd { padding: 4px 7px; border: 1px solid rgba(151, 174, 230, 0.17); border-radius: 6px; background: rgba(22, 32, 60, 0.55); color: #d8e4ff; font: 600 0.48rem "Orbitron", monospace; }
-.starfall-streak-row { margin-top: 6px; padding-top: 10px; border-top: 1px solid rgba(143, 170, 240, 0.12); }
-.starfall-streak-row strong { color: #ffd46f; font: 700 0.62rem "Orbitron", monospace; }
-.starfall-sidebar-note { margin: 0; padding: 0 3px; color: #8998b7; font-size: 0.62rem; line-height: 1.55; }
-.starfall-icon-button:focus-visible, .starfall-launch-button:focus-visible, .starfall-burst-button:focus-visible { outline: 2px solid #79edff; outline-offset: 3px; }
+        document.getElementById("type-badge").textContent = p.type;
+        document.getElementById("type-badge").style.borderColor = p.color;
+        document.getElementById("type-badge").style.color = p.color;
 
-@media (max-width: 760px) {
-    #game-panel { width: min(96vw, 680px); max-height: 95dvh; border-radius: 19px; }
-    .starfall-header { padding: 19px 19px 16px; }
-    .starfall-layout { grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 12px; }
-    .starfall-arena { height: min(42dvh, 370px); min-height: 270px; }
-    .starfall-sidebar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .starfall-mission, .starfall-sidebar-note { grid-column: 1 / -1; }
-}
-@media (max-width: 480px) {
-    .starfall-header { gap: 10px; padding: 16px 14px 13px; }
-    .starfall-eyebrow { font-size: 0.48rem; }
-    .starfall-subtitle { max-width: 250px; font-size: 0.72rem; }
-    .starfall-header-actions { gap: 5px; }
-    .starfall-mode { min-height: 30px; padding: 0 7px; font-size: 0.45rem; }
-    .starfall-icon-button { width: 31px; min-height: 31px; }
-    .starfall-layout { padding: 10px; }
-    .starfall-hud { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
-    .starfall-stat { min-height: 57px; padding: 9px 10px; }
-    .starfall-arena { height: min(41dvh, 350px); min-height: 250px; }
-    .starfall-overlay { padding: 12px; }
-    .starfall-overlay-card { padding: 20px 16px; }
-    .starfall-overlay-icon { width: 47px; height: 47px; margin-bottom: 13px; }
-    .starfall-overlay-copy { font-size: 0.72rem; }
-    .starfall-runline { flex-wrap: wrap; gap: 7px 12px; font-size: 0.46rem; }
-    .starfall-sidebar { grid-template-columns: minmax(0, 1fr); }
-    .starfall-mission, .starfall-sidebar-note { grid-column: auto; }
-}
-@media (prefers-reduced-motion: reduce) {
-    #game-panel, #game-backdrop, .starfall-overlay, .starfall-toast, .starfall-progress-track > span, .starfall-launch-button, .starfall-icon-button, .starfall-burst-button { transition-duration: 0.01ms; }
+        document.getElementById("planet-meta").textContent = `SECTOR 0${p.index} // ${p.type}`;
+        document.getElementById("planet-meta").style.color = p.color;
+        document.getElementById("planet-name").textContent = p.name;
+        document.getElementById("planet-tagline").textContent = p.tagline;
+
+        document.getElementById("planet-fact").textContent = p.fact;
+        document.getElementById("planet-fact").style.borderColor = p.color;
+
+        document.getElementById("didyouknow").style.borderColor = `${p.color}50`;
+        document.getElementById("didyouknow").style.background = `${p.color}10`;
+        document.getElementById("dyk-label").style.color = p.color;
+        document.getElementById("dyk-text").textContent = p.facts[0];
+
+        document.getElementById("stats").innerHTML = `
+          <div class="stat-pill"><span class="stat-label">Diameter</span><span class="stat-value">${p.diameter}</span></div>
+          <div class="stat-pill"><span class="stat-label">Year</span><span class="stat-value">${p.year}</span></div>
+          <div class="stat-pill"><span class="stat-label">Gravity</span><span class="stat-value">${p.gravity}</span></div>
+        `;
+
+        if (!visited.has(idx)) {
+            visited.add(idx);
+            document.querySelectorAll(".nav-btn")[idx].classList.add("visited");
+            addXP(50);
+            const rect = card.getBoundingClientRect();
+            burstParticles(rect.left + rect.width / 2, rect.top + rect.height / 2, p.color, 50);
+            audio.success();
+        }
+
+        discoverBtn.textContent = visited.size === PLANETS.length ? "🌌 Re-examine Orbit Sector" : "🚀 Discover Next Sector";
+    }, 450);
 }
 
-/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   QUVIX AI — FLOATING ASSISTANT
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-#quvix-btn {
-    position: fixed; bottom: 1.5rem; left: 1.5rem; z-index: 90; width: 72px; height: 72px;
-    border-radius: 50%; border: 1.5px solid rgba(199, 125, 255, 0.7);
-    background: radial-gradient(circle at 30% 30%, rgba(0.199, 125, 255, 15), transparent 60%), linear-gradient(135deg, #6C3BAA, #4a2578); /* FIXED RGBA TYPO */
-    color: #ffffff; cursor: pointer; display: flex; align-items: center; justify-content: center;
-    font-family: 'Orbitron', monospace; font-weight: 900; font-size: 1.05rem; letter-spacing: 0.08em;
-    box-shadow: 0 0 25px rgba(108, 59, 170, 0.8), 0 0 60px rgba(108, 59, 170, 0.4), inset 0 0 15px rgba(199, 125, 255, 0.3);
-    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease;
-    animation: quvix-pulse 3.5s ease-in-out infinite; text-shadow: 0 0 12px rgba(199, 125, 255, 0.9); user-select: none;
-}
-@keyframes quvix-pulse {
-    0%, 100% { box-shadow: 0 0 25px rgba(108, 59, 170, 0.8), 0 0 60px rgba(108, 59, 170, 0.4), inset 0 0 15px rgba(199, 125, 255, 0.3); }
-    50% { box-shadow: 0 0 35px rgba(199, 125, 255, 0.9), 0 0 90px rgba(108, 59, 170, 0.6), inset 0 0 20px rgba(199, 125, 255, 0.5); }
-}
-#quvix-btn:hover { transform: scale(1.1); box-shadow: 0 0 45px rgba(199, 125, 255, 1), 0 0 100px rgba(108, 59, 170, 0.7), inset 0 0 20px rgba(199, 125, 255, 0.6); }
-#quvix-btn.open { animation: none; transform: scale(0.85); background: linear-gradient(135deg, #4a2578, #2d1750); border-color: rgba(199, 125, 255, 0.4); }
-
-#quvix-panel {
-    position: fixed; bottom: 6.5rem; left: 1.5rem; z-index: 95; width: 390px; max-width: calc(100vw - 3rem);
-    height: 560px; max-height: calc(100vh - 9rem); border-radius: 1.25rem; border: 1px solid rgba(108, 59, 170, 0.45);
-    background: rgba(8, 11, 18, 0.96); backdrop-filter: blur(20px);
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8), 0 0 60px rgba(108, 59, 170, 0.25);
-    display: flex; flex-direction: column; overflow: hidden; opacity: 0; pointer-events: none;
-    transform: translateY(20px) scale(0.94); transform-origin: bottom left;
-    transition: opacity 0.3s ease, transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-}
-#quvix-panel.active { opacity: 1; pointer-events: auto; transform: translateY(0) scale(1); }
-
-#quvix-panel .qv-header { display: flex; align-items: center; gap: 10px; padding: 14px 18px; background: rgba(108, 59, 170, 0.08); border-bottom: 1px solid rgba(108, 59, 170, 0.25); }
-#quvix-panel .qv-logo { font-size: 24px; color: #c77dff; text-shadow: 0 0 15px rgba(199, 125, 255, 0.6); line-height: 1; }
-#quvix-panel .qv-header-text { display: flex; flex-direction: column; flex: 1; }
-#quvix-panel .qv-title { font-family: 'Orbitron', monospace; font-size: 13px; font-weight: 700; letter-spacing: 0.08em; color: #e0d4ff; text-shadow: 0 0 12px rgba(199, 125, 255, 0.4); }
-#quvix-panel .qv-sub { font-size: 11px; color: rgba(199, 125, 255, 0.6); margin-top: 1px; letter-spacing: 0.03em; }
-#quvix-panel .qv-status { width: 8px; height: 8px; border-radius: 50%; background: #00e5ff; box-shadow: 0 0 12px rgba(0, 229, 255, 0.8); animation: quvix-dot 2.5s ease-in-out infinite; }
-@keyframes quvix-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-#quvix-panel .qv-close { background: none; border: none; color: #94a3b8; font-size: 1.4rem; cursor: pointer; padding: 0 4px; line-height: 1; transition: color 0.2s; }
-#quvix-panel .qv-close:hover { color: #c77dff; }
-
-#quvix-panel .qv-quick { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px; border-bottom: 1px solid rgba(108, 59, 170, 0.15); background: rgba(108, 59, 170, 0.03); }
-#quvix-panel .qv-qbtn { padding: 4px 12px; border-radius: 20px; cursor: pointer; border: 1px solid rgba(199, 125, 255, 0.3); background: rgba(108, 59, 170, 0.12); color: rgba(220, 200, 255, 0.9); font-size: 11px; font-family: 'Inter', sans-serif; transition: all 0.2s ease; }
-#quvix-panel .qv-qbtn:hover { background: rgba(108, 59, 170, 0.3); border-color: rgba(199, 125, 255, 0.7); color: #ffffff; box-shadow: 0 0 15px rgba(108, 59, 170, 0.3); transform: translateY(-1px); }
-
-#quvix-panel .qv-chat { flex: 1; overflow-y: auto; padding: 16px 14px; display: flex; flex-direction: column; gap: 12px; scrollbar-width: thin; scrollbar-color: rgba(108, 59, 170, 0.4) transparent; position: relative; }
-#quvix-panel .qv-chat::-webkit-scrollbar { width: 5px; }
-#quvix-panel .qv-chat::-webkit-scrollbar-track { background: transparent; }
-#quvix-panel .qv-chat::-webkit-scrollbar-thumb { background: rgba(108, 59, 170, 0.6); border-radius: 10px; }
-#quvix-panel .qv-chat::-webkit-scrollbar-thumb:hover { background: rgba(199, 125, 255, 0.7); }
-
-#qv-welcome { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; padding: 20px 30px; border-radius: 20px; background: rgba(108, 59, 170, 0.08); border: 1px solid rgba(199, 125, 255, 0.2); box-shadow: 0 0 40px rgba(108, 59, 170, 0.15); animation: qv-float 4s ease-in-out infinite; width: 80%; max-width: 260px; }
-#qv-welcome h1 { font-family: 'Orbitron', monospace; font-size: 1.2rem; letter-spacing: 0.06em; background: linear-gradient(135deg, #324ab2, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; filter: drop-shadow(0 0 15px rgba(199, 125, 255, 0.4)); }
-#qv-welcome p { font-size: 0.75rem; color: rgba(199, 125, 255, 0.7); margin-top: 4px; }
-@keyframes qv-float { 50% { transform: translate(-50%, -56%); } }
-
-#quvix-panel .qv-msg-wrap { display: flex; gap: 8px; animation: qv-fadeUp 0.25s ease; }
-#quvix-panel .qv-msg-wrap.qv-user { flex-direction: row-reverse; }
-@keyframes qv-fadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-#quvix-panel .qv-avatar { width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0; margin-top: 2px; background: linear-gradient(135deg, #7B2FBE, #C77DFF); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: white; box-shadow: 0 0 12px rgba(130, 80, 210, 0.4); font-family: 'Inter', sans-serif; }
-#quvix-panel .qv-msg-content { display: flex; flex-direction: column; gap: 2px; max-width: 78%; }
-#quvix-panel .qv-msg-wrap.qv-user .qv-msg-content { align-items: flex-end; }
-#quvix-panel .qv-bubble { padding: 9px 14px; border-radius: 14px; font-size: 13px; line-height: 1.55; border: 1px solid rgba(255, 255, 255, 0.04); font-family: 'Inter', sans-serif; user-select: none; }
-#quvix-panel .qv-bubble.qv-ai { background: rgba(108, 59, 170, 0.85); color: #f2edff; border-bottom-left-radius: 4px; border-left: 2px solid rgba(199, 125, 255, 0.4); box-shadow: 0 2px 15px rgba(130, 80, 210, 0.25); }
-#quvix-panel .qv-bubble.qv-user { background: linear-gradient(135deg, #00B4D8, #0077B6); color: #ffffff; border-bottom-right-radius: 4px; box-shadow: 0 2px 15px rgba(0, 180, 216, 0.3); border-right: 2px solid rgba(0, 229, 255, 0.3); }
-#quvix-panel .qv-ts { font-size: 9px; color: rgba(199, 125, 255, 0.4); padding: 0 2px; font-family: 'Inter', sans-serif; }
-
-#quvix-panel .qv-typing-bub { display: flex; align-items: center; gap: 5px; padding: 12px 15px; min-width: 50px; }
-#quvix-panel .qv-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(199, 125, 255, 0.9); animation: qv-bounce 1.2s ease-in-out infinite; }
-#quvix-panel .qv-dot:nth-child(2) { animation-delay: 0.2s; }
-#quvix-panel .qv-dot:nth-child(3) { animation-delay: 0.4s; }
-@keyframes qv-bounce { 0%, 60%, 100% { transform: translateY(0); opacity: 0.4; } 30% { transform: translateY(-5px); opacity: 1; } }
-
-#quvix-panel .qv-input-area { display: flex; gap: 8px; padding: 12px 14px; background: rgba(108, 59, 170, 0.04); border-top: 1px solid rgba(108, 59, 170, 0.15); }
-#quvix-panel #qv-input { flex: 1; padding: 10px 16px; border-radius: 24px; outline: none; border: 1px solid rgba(199, 125, 255, 0.25); background: rgba(0, 0, 0, 0.4); color: #e8e0ff; font-size: 13px; font-family: 'Inter', sans-serif; transition: all 0.25s ease; }
-#quvix-panel #qv-input::placeholder { color: rgba(199, 125, 255, 0.4); }
-#quvix-panel #qv-input:focus { border-color: rgba(199, 125, 255, 0.7); box-shadow: 0 0 0 3px rgba(108, 59, 170, 0.15), 0 0 20px rgba(108, 59, 170, 0.1); }
-#quvix-panel #qv-send { width: 40px; height: 40px; border-radius: 50%; border: none; cursor: pointer; background: linear-gradient(135deg, #7B2FBE, #9B5FE8); color: white; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.2s ease; box-shadow: 0 2px 12px rgba(130, 80, 210, 0.4); font-size: 14px; }
-#quvix-panel #qv-send:hover:not(:disabled) { transform: scale(1.08) rotate(-5deg); box-shadow: 0 4px 20px rgba(130, 80, 210, 0.6); }
-#quvix-panel #qv-send:disabled { opacity: 0.3; cursor: not-allowed; transform: none; }
-
-#quvix-panel .qv-footer { padding: 8px 12px; text-align: center; font-size: 10px; color: rgba(199, 125, 255, 0.7); border-top: 1px solid rgba(108, 59, 170, 0.1); font-family: 'Inter', sans-serif; letter-spacing: 0.02em; }
-
-@media (max-width: 520px) {
-    #quvix-panel { width: calc(100vw - 2rem); left: 1rem; bottom: 5.5rem; height: 70vh; max-height: 70vh; }
-    #quvix-btn { width: 56px; height: 56px; bottom: 1rem; left: 1rem; }
+function addXP(amount) {
+    xp += amount;
+    const newLevel = Math.floor(xp / 150) + 1;
+    if (newLevel > level) {
+        level = newLevel;
+        audio.play(880, 'triangle', 0.15, 0.06);
+        setTimeout(() => audio.play(1100, 'triangle', 0.2, 0.05), 120);
+        setTimeout(() => audio.play(1320, 'triangle', 0.25, 0.04), 240);
+    }
+    updateXPUI();
 }
 
-/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   MUSIC TOGGLE — Glassmorphic Neon Red
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-#musicBtn {
-    position: fixed; top: 1.5rem; right: 1.5rem; z-index: 90; padding: 0.65rem 1.25rem; border-radius: 999px;
-    font-family: 'Orbitron', monospace; font-size: 0.6rem; font-weight: 600; letter-spacing: 0.18em;
-    text-transform: uppercase; color: #ffe4ea; cursor: pointer; overflow: hidden;
-    background: linear-gradient(135deg, rgba(255, 7, 58, 0.22) 0%, rgba(255, 7, 58, 0.06) 100%);
-    backdrop-filter: blur(14px) saturate(180%); -webkit-backdrop-filter: blur(14px) saturate(180%);
-    border: 1px solid rgba(255, 7, 58, 0.65);
-    box-shadow: 0 0 18px rgba(255, 7, 58, 0.45), 0 8px 24px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.18), inset 0 -1px 0 rgba(255, 7, 58, 0.25);
-    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease, background 0.3s ease, border-color 0.3s ease, color 0.3s ease;
-    text-shadow: 0 0 10px rgba(255, 7, 58, 0.85); display: inline-flex; align-items: center; gap: 0.45rem; user-select: none;
+function updateXPUI() {
+    xpLabel.textContent = `XP: ${xp}`;
+    const pct = Math.min((visited.size / PLANETS.length) * 100, 100);
+    xpBar.style.width = `${pct}%`;
+    xpLevel.textContent = `Lv.${level}`;
 }
-#musicBtn::before { content: ''; position: absolute; inset: 0; border-radius: inherit; background: radial-gradient(circle at 30% 15%, rgba(255, 255, 255, 0.22), transparent 55%); pointer-events: none; }
-#musicBtn::after { content: ''; position: absolute; inset: -2px; border-radius: inherit; background: radial-gradient(circle at 50% 50%, rgba(255, 7, 58, 0.4), transparent 70%); opacity: 0; transition: opacity 0.3s ease; pointer-events: none; z-index: -1; }
-#musicBtn:hover {
-    background: linear-gradient(135deg, rgba(255, 7, 58, 0.38) 0%, rgba(255, 7, 58, 0.15) 100%);
-    border-color: #FF073A; color: #ffffff; transform: translateY(-3px) scale(1.04);
-    box-shadow: 0 0 35px rgba(255, 7, 58, 0.85), 0 0 65px rgba(255, 7, 58, 0.35), 0 12px 32px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.25), inset 0 -1px 0 rgba(255, 7, 58, 0.35);
-    text-shadow: 0 0 15px rgba(255, 7, 58, 1);
+
+discoverBtn.onclick = () => {
+    audio.click();
+    if (currentIndex === null) selectPlanet(0);
+    else selectPlanet((currentIndex + 1) % PLANETS.length);
+};
+
+function openModal(html) {
+    modalBody.innerHTML = html;
+    overlay.classList.add("active");
 }
-#musicBtn:hover::after { opacity: 1; }
-#musicBtn:active { transform: translateY(0) scale(0.96); }
-#musicBtn.playing {
-    border-color: #FF073A; background: linear-gradient(135deg, rgba(255, 7, 58, 0.32) 0%, rgba(255, 7, 58, 0.10) 100%);
-    animation: music-pulse 2.4s ease-in-out infinite;
+document.getElementById("modal-close").onclick = () => overlay.classList.remove("active");
+overlay.onclick = (e) => { if (e.target === overlay) overlay.classList.remove("active"); };
+
+// Modals (Quiz, Data, Moons, Scale, Badges, Map, Sound)
+document.getElementById("quiz-btn").onclick = () => {
+    if (currentIndex === null) return;
+    audio.click();
+    const p = PLANETS[currentIndex];
+    const qIdx = Math.floor(Math.random() * p.quiz.length);
+    const q = p.quiz[qIdx];
+    openModal(`<h2>${p.name} — Quiz Challenge</h2><p style="margin-bottom:1.2rem;font-size:0.95rem;line-height:1.5;">${q.q}</p><div>${q.options.map((opt, i) => `<button class="quiz-option" data-qi="${qIdx}" data-opt="${i}" data-answer="${q.answer}" onclick="handleQuizAnswer(this, ${q.answer})">${opt}</button>`).join('')}</div><div id="quiz-res" style="margin-top:1rem;font-family:'Orbitron',monospace;font-size:0.8rem;"></div>`);
+};
+window.handleQuizAnswer = (el, correct) => {
+    const res = document.getElementById("quiz-res");
+    const btns = document.querySelectorAll(".quiz-option");
+    const selected = parseInt(el.dataset.opt);
+    btns.forEach((btn, i) => { btn.disabled = true; if (i === correct) btn.classList.add("correct"); if (i === selected && i !== correct) btn.classList.add("wrong"); });
+    if (selected === correct) { audio.success(); res.textContent = "✔ TELEMETRY CONFIRMED! +25 XP"; res.style.color = "#4ade80"; addXP(25); }
+    else { audio.error(); res.textContent = "✖ SIGNAL ERROR. INCORRECT."; res.style.color = "#f87171"; }
+};
+document.getElementById("info-btn").onclick = () => {
+    if (currentIndex === null) return;
+    audio.click();
+    const p = PLANETS[currentIndex];
+    openModal(`<h2>${p.name} — Deep Telemetry</h2><p style="margin-bottom:0.6rem;font-size:0.88rem;"><strong>Atmosphere:</strong> ${p.atmosphere}</p><p style="margin-bottom:0.6rem;font-size:0.88rem;"><strong>Composition:</strong> ${p.composition}</p><p style="margin-bottom:0.6rem;font-size:0.88rem;"><strong>Avg Distance:</strong> ${p.distance}</p><p style="margin-bottom:0.6rem;font-size:0.88rem;"><strong>Temperature:</strong> ${p.temp}</p><h3 style="margin-top:1.2rem;font-family:'Orbitron',monospace;font-size:0.7rem;color:${p.color}">⟡ ORBITAL LOGS</h3><ul style="padding-left:1.2rem;margin-top:0.6rem;font-size:0.85rem;line-height:1.7;color:#d1d5db;list-style-type:'› ';">${p.facts.map(f => `<li style="padding-left:0.3rem;">${f}</li>`).join('')}</ul>`);
+};
+document.getElementById("moons-btn").onclick = () => {
+    if (currentIndex === null) return;
+    audio.click();
+    const p = PLANETS[currentIndex];
+    let html = `<h2>${p.name} — Satellite Roster</h2><p style="margin-bottom:1rem;font-size:0.88rem;">Tracked Satellites: <strong>${p.moons}</strong></p>`;
+    if (p.moonsList.length > 0) html += `<div style="display:flex;flex-wrap:wrap;gap:0.5rem;">${p.moonsList.map(m => `<span style="padding:0.35rem 0.75rem;background:rgba(50,74,178,0.12);border:1px solid var(--border);border-radius:0.5rem;font-family:'Orbitron',monospace;font-size:0.65rem;color:#cbd5e1;">${m}</span>`).join('')}</div>`;
+    else html += `<p style="color:#64748b;font-size:0.85rem;">No natural orbiting bodies recorded.</p>`;
+    openModal(html);
+};
+document.getElementById("scale-btn").onclick = () => {
+    audio.click();
+    const maxDiam = Math.max(...PLANETS.map(p => p.diameterNum));
+    let rows = PLANETS.map(p => { const pct = Math.max((p.diameterNum / maxDiam) * 100, 2.5); return `<div class="scale-row"><span class="scale-label">${p.symbol} ${p.name}</span><div class="scale-bar-wrap"><div class="scale-bar" style="width:${pct}%;background:${p.color};"></div><span class="scale-val">${p.diameter}</span></div></div>`; }).join('');
+    openModal(`<h2>📐 Volumetric Scale Comparison</h2><p style="font-size:0.7rem;color:#94a3b8;margin-bottom:1.2rem;">Relative diameters (Jupiter = 100% reference)</p><div>${rows}</div>`);
+};
+document.getElementById("badges-btn").onclick = () => {
+    audio.click();
+    const total = PLANETS.length, v = visited.size;
+    openModal(`<h2>🏅 Exploration Achievements</h2><div class="badge-item ${v >= 1 ? 'earned' : ''}"><span style="font-size:1.4rem;">🚀</span><div><div style="font-weight:600;font-size:0.88rem;">First Orbit</div><div style="font-size:0.7rem;color:#94a3b8;">Scanned 1 planetary system</div>${v >= 1 ? '✅' : '🔒'}</div></div><div class="badge-item ${v >= 4 ? 'earned' : ''}"><span style="font-size:1.4rem;">🪐</span><div><div style="font-weight:600;font-size:0.88rem;">System Navigator</div><div style="font-size:0.7rem;color:#94a3b8;">Mapped at least 4 worlds</div>${v >= 4 ? '✅' : `${v}/4`}</div></div><div class="badge-item ${v === total ? 'earned' : ''}"><span style="font-size:1.4rem;">👑</span><div><div style="font-weight:600;font-size:0.88rem;">Grand Astronomer</div><div style="font-size:0.7rem;color:#94a3b8;">Fully charted all ${total} major planets</div>${v === total ? '✅' : `${v}/${total}`}</div></div><div style="margin-top:1rem;padding:0.8rem;background:rgba(50,74,178,0.06);border-radius:0.6rem;border:1px solid var(--border);"><span style="font-family:'Orbitron',monospace;font-size:0.6rem;color:#94a3b8;">PROGRESS</span><div style="display:flex;gap:0.3rem;margin-top:0.4rem;flex-wrap:wrap;">${PLANETS.map((p, i) => `<span style="font-size:1.1rem;opacity:${visited.has(i) ? 1 : 0.2};filter:${visited.has(i) ? 'none' : 'grayscale(1)'};">${p.symbol}</span>`).join('')}</div></div>`);
+};
+document.getElementById("map-btn").onclick = () => {
+    audio.click();
+    openModal(`<h2>🗺️ Orbital Sector Map</h2><div style="display:flex;flex-direction:column;gap:0.4rem;margin-top:0.8rem;">${PLANETS.map((p, i) => `<div class="orbit-map-item" data-planet-idx="${i}" style="border-left-color:${p.color};"><span class="om-symbol">${p.symbol}</span><span class="om-name">${p.name}</span><span class="om-dist">${p.distance}</span></div>`).join('')}</div>`);
+    modalBody.querySelectorAll(".orbit-map-item").forEach(el => el.addEventListener("click", () => { selectPlanet(parseInt(el.dataset.planetIdx, 10)); overlay.classList.remove("active"); }));
+};
+document.getElementById("sound-btn").onclick = () => {
+    audio.enabled = !audio.enabled;
+    document.getElementById("sound-btn").textContent = `🔊 Audio: ${audio.enabled ? 'On' : 'Off'}`;
+    if (audio.enabled) audio.play(660, 'sine', 0.1);
+};
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  STARFALL RUN MINI-GAME (Combined)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const BEST_KEY = "spacefarer-starfall-best-v1";
+const rand = (min, max) => min + Math.random() * (max - min);
+const clock = (seconds) => { const value = Math.floor(seconds); return `${String(Math.floor(value / 60)).padStart(2, "0")}:${String(value % 60).padStart(2, "0")}`; };
+function readBest() { try { return Math.max(0, Number(localStorage.getItem(BEST_KEY)) || 0); } catch { return 0; } }
+function saveBest(score) { try { localStorage.setItem(BEST_KEY, String(score)); } catch {} }
+
+function createRun(width, height, best = readBest()) {
+    return {
+        width, height, status: "ready", score: 0, best, elapsed: 0, lives: 3, sector: 1, charge: 20, shield: 0, invulnerable: 0, shards: 0, streak: 0, lastShardAt: -99, nextRock: 0.8, nextShard: 1.5, nextCell: 12, rocks: [], pickups: [], sparks: [],
+        stars: Array.from({ length: 76 }, () => ({ x: Math.random() * width, y: Math.random() * height, radius: rand(0.45, 1.7), speed: rand(9, 34), phase: rand(0, Math.PI * 2), alpha: rand(0.22, 0.82) })),
+        ship: { x: width / 2, y: height * 0.76 }, target: null, shake: 0,
+    };
 }
-@keyframes music-pulse {
-    0%, 100% { box-shadow: 0 0 18px rgba(255, 7, 58, 0.5), 0 8px 24px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.18); }
-    50% { box-shadow: 0 0 40px rgba(255, 7, 58, 0.95), 0 0 80px rgba(255, 7, 58, 0.45), 0 8px 24px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.25); }
+function burst(run, x, y, hue, count = 14) {
+    for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2; const speed = rand(25, 150);
+        run.sparks.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: rand(0.3, 0.85), hue, size: rand(1.2, 3.2) });
+    }
 }
-@media (max-width: 520px) {
-    #musicBtn { top: 1rem; right: 1rem; padding: 0.5rem 0.9rem; font-size: 0.5rem; letter-spacing: 0.12em; }
+function drawRock(ctx, rock) {
+    ctx.save(); ctx.translate(rock.x, rock.y); ctx.rotate(rock.angle); ctx.shadowBlur = 16; ctx.shadowColor = "rgba(255, 111, 138, 0.25)";
+    const gradient = ctx.createLinearGradient(-rock.radius, -rock.radius, rock.radius, rock.radius);
+    gradient.addColorStop(0, "#a5a0b6"); gradient.addColorStop(0.54, "#62687d"); gradient.addColorStop(1, "#32384e");
+    ctx.fillStyle = gradient; ctx.beginPath();
+    for (let i = 0; i < 9; i++) {
+        const angle = (i / 9) * Math.PI * 2; const wobble = 0.83 + Math.sin(i * 5 + rock.seed) * 0.1 + Math.cos(i * 2.4 + rock.seed) * 0.05;
+        const x = Math.cos(angle) * rock.radius * wobble; const y = Math.sin(angle) * rock.radius * wobble;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath(); ctx.fill(); ctx.shadowBlur = 0;
+    ctx.fillStyle = "rgba(27, 31, 49, 0.46)"; ctx.beginPath(); ctx.arc(-rock.radius * 0.22, -rock.radius * 0.13, rock.radius * 0.21, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(rock.radius * 0.32, rock.radius * 0.23, rock.radius * 0.12, 0, Math.PI * 2); ctx.fill(); ctx.restore();
 }
+function drawRun(ctx, run, timestamp) {
+    const { width, height } = run; if (!width || !height) return;
+    ctx.save();
+    if (run.shake > 0) { const amount = run.shake * 12; ctx.translate(rand(-amount, amount), rand(-amount, amount)); }
+    const background = ctx.createLinearGradient(0, 0, width, height);
+    background.addColorStop(0, "#07122a"); background.addColorStop(0.52, "#070c20"); background.addColorStop(1, "#100d2d");
+    ctx.fillStyle = background; ctx.fillRect(0, 0, width, height);
+    const nebula = ctx.createRadialGradient(width * 0.19, height * 0.36, 0, width * 0.19, height * 0.36, width * 0.54);
+    nebula.addColorStop(0, "rgba(65, 73, 184, 0.2)"); nebula.addColorStop(0.52, "rgba(30, 79, 154, 0.08)"); nebula.addColorStop(1, "rgba(5, 12, 28, 0)");
+    ctx.fillStyle = nebula; ctx.fillRect(0, 0, width, height);
+    ctx.save(); ctx.globalAlpha = 0.14; ctx.strokeStyle = "#5b7ac7"; ctx.lineWidth = 1;
+    for (let x = 32; x < width; x += 64) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke(); }
+    for (let y = 38; y < height; y += 64) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke(); }
+    ctx.restore();
+    run.stars.forEach((star) => {
+        const alpha = star.alpha * (0.65 + Math.sin(star.phase + timestamp * 0.0003) * 0.35);
+        ctx.globalAlpha = alpha; ctx.fillStyle = star.radius > 1.25 ? "#c8f2ff" : "#b4c2ec";
+        ctx.beginPath(); ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2); ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+    const planetX = width * 0.82; const planetY = height * 0.18; const planetRadius = Math.min(44, height * 0.13);
+    ctx.save(); ctx.globalAlpha = 0.72; ctx.strokeStyle = "rgba(134, 156, 255, 0.46)"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(planetX, planetY, planetRadius * 1.62, planetRadius * 0.47, -0.2, 0, Math.PI * 2); ctx.stroke();
+    const planet = ctx.createRadialGradient(planetX - planetRadius * 0.45, planetY - planetRadius * 0.52, 2, planetX, planetY, planetRadius);
+    planet.addColorStop(0, "#d4b6ff"); planet.addColorStop(0.38, "#7468df"); planet.addColorStop(1, "#262c73");
+    ctx.shadowBlur = 18; ctx.shadowColor = "rgba(152, 130, 255, 0.56)"; ctx.fillStyle = planet;
+    ctx.beginPath(); ctx.arc(planetX, planetY, planetRadius, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0; ctx.restore();
+    run.pickups.forEach((item) => {
+        const pulse = 1 + Math.sin(item.phase) * 0.13;
+        ctx.save(); ctx.translate(item.x, item.y); ctx.rotate(item.kind === "shard" ? Math.PI / 4 + item.phase * 0.16 : item.phase * 0.12);
+        ctx.shadowBlur = item.kind === "shard" ? 20 : 24; ctx.shadowColor = item.kind === "shard" ? "#66e4ff" : "#79ffd7";
+        ctx.fillStyle = item.kind === "shard" ? "#8cf2ff" : "#9cffdc"; ctx.globalAlpha = 0.86 + Math.sin(item.phase) * 0.14;
+        ctx.fillRect(-item.radius * pulse, -item.radius * pulse, item.radius * pulse * 2, item.radius * pulse * 2);
+        ctx.shadowBlur = 0; ctx.strokeStyle = "rgba(255,255,255,0.78)"; ctx.lineWidth = 1;
+        ctx.strokeRect(-item.radius * pulse, -item.radius * pulse, item.radius * pulse * 2, item.radius * pulse * 2); ctx.restore();
+    });
+    run.rocks.forEach((rock) => drawRock(ctx, rock));
+    run.sparks.forEach((spark) => {
+        ctx.globalAlpha = Math.max(0, spark.life / 0.85); ctx.fillStyle = `hsl(${spark.hue} 95% 70%)`;
+        ctx.shadowBlur = 10; ctx.shadowColor = ctx.fillStyle;
+        ctx.beginPath(); ctx.arc(spark.x, spark.y, spark.size, 0, Math.PI * 2); ctx.fill();
+    });
+    ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+    if (run.shield > 0) {
+        ctx.save(); ctx.globalAlpha = 0.62 + Math.sin(timestamp * 0.012) * 0.13; ctx.strokeStyle = "#74f0ff";
+        ctx.lineWidth = 2; ctx.shadowBlur = 24; ctx.shadowColor = "#59deff";
+        ctx.beginPath(); ctx.arc(run.ship.x, run.ship.y, 34 + Math.sin(timestamp * 0.01) * 2, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+    }
+    if (!(run.invulnerable > 0 && Math.floor(timestamp / 90) % 2 === 0)) {
+        const engine = ctx.createLinearGradient(run.ship.x, run.ship.y + 8, run.ship.x, run.ship.y + 31);
+        engine.addColorStop(0, "rgba(122, 226, 255, 0.9)"); engine.addColorStop(1, "rgba(89, 120, 255, 0)");
+        ctx.fillStyle = engine; ctx.beginPath(); ctx.moveTo(run.ship.x - 5, run.ship.y + 4); ctx.lineTo(run.ship.x, run.ship.y + 29 + Math.sin(timestamp * 0.02) * 5); ctx.lineTo(run.ship.x + 5, run.ship.y + 4); ctx.fill();
+        ctx.save(); ctx.translate(run.ship.x, run.ship.y); ctx.shadowBlur = 23; ctx.shadowColor = "#73eaff"; ctx.fillStyle = "#e8fbff";
+        ctx.beginPath(); ctx.moveTo(0, -20); ctx.lineTo(16, 15); ctx.lineTo(0, 9); ctx.lineTo(-16, 15); ctx.closePath(); ctx.fill(); ctx.shadowBlur = 0;
+        ctx.fillStyle = "#61dfff"; ctx.beginPath(); ctx.moveTo(0, -12); ctx.lineTo(7, 8); ctx.lineTo(0, 5); ctx.lineTo(-7, 8); ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = "rgba(255,255,255,0.75)"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, -18); ctx.lineTo(0, 9); ctx.stroke(); ctx.restore();
+    }
+    if (run.target && run.status === "playing") {
+        ctx.save(); ctx.strokeStyle = "rgba(108, 231, 255, 0.35)"; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(run.target.x, run.target.y, 13, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(run.target.x - 18, run.target.y); ctx.lineTo(run.target.x - 8, run.target.y); ctx.moveTo(run.target.x + 8, run.target.y); ctx.lineTo(run.target.x + 18, run.target.y); ctx.stroke(); ctx.restore();
+    }
+    ctx.restore();
+}
+
+function initStarfallRun({ audio, addXP }) {
+    const $ = (id) => document.getElementById(id);
+    const panel = $("game-panel"), backdrop = $("game-backdrop"), openButton = $("game-btn"), closeButton = $("game-close"), pauseButton = $("game-pause"), startButton = $("game-start"), pulseButton = $("game-burst"), canvas = $("game-canvas"), arena = $("game-arena"), overlay = $("game-overlay"), ctx = canvas?.getContext("2d");
+    if (!panel || !backdrop || !openButton || !closeButton || !canvas || !arena || !ctx || !overlay) return;
+
+    const keys = new Set(); let run = createRun(900, 480); let loopId = 0; let previousFrame = 0; let lastHudUpdate = 0; let pointerId = null; let lastFocusedElement = null; let toastTimer = 0;
+    const scoreEl = $("game-score"), bestEl = $("game-best"), sectorTimeEl = $("game-sector-time"), hullEl = $("game-hull"), missionFill = $("game-mission-progress"), missionMeta = $("game-mission-meta"), missionDone = $("game-mission-complete"), chargeEl = $("game-charge"), chargeLabelEl = $("game-charge-label"), burstStateEl = $("game-burst-state"), overlayKicker = $("game-overlay-kicker"), overlayTitle = $("game-overlay-title"), overlayCopy = $("game-overlay-copy"), overlayIcon = $("game-overlay-icon"), controlHints = $("game-control-hints"), runTimeEl = $("game-run-time"), streakEl = $("game-streak"), sideStreakEl = $("game-side-streak"), flightStatusEl = $("game-flight-status"), modeStatus = $("game-mode-status"), toast = $("game-toast");
+
+    function resizeCanvas() {
+        const rect = arena.getBoundingClientRect(); if (!rect.width || !rect.height) return;
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.round(rect.width * dpr); canvas.height = Math.round(rect.height * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        run.width = rect.width; run.height = rect.height;
+        run.ship.x = Math.max(18, Math.min(rect.width - 18, run.ship.x || rect.width / 2));
+        run.ship.y = Math.max(18, Math.min(rect.height - 18, run.ship.y || rect.height * 0.76));
+        run.stars.forEach((star) => { star.x = Math.min(rect.width, star.x); star.y = Math.min(rect.height, star.y); });
+        drawRun(ctx, run, performance.now());
+    }
+
+    function renderHud() {
+        const currentScore = Math.floor(run.score), currentBest = Math.max(run.best, currentScore);
+        if (scoreEl) scoreEl.textContent = currentScore.toLocaleString();
+        if (bestEl) bestEl.textContent = currentBest.toLocaleString();
+        if (sectorTimeEl) sectorTimeEl.innerHTML = `${String(run.sector).padStart(2, "0")} <span>· ${clock(run.elapsed)}</span>`;
+        if (hullEl) {
+            hullEl.innerHTML = [0, 1, 2].map((heart) => `<span class="game-heart${heart >= run.lives ? " is-lost" : ""}" aria-hidden="true">♥</span>`).join("");
+            hullEl.setAttribute("aria-label", `${run.lives} hull points`);
+        }
+        if (missionFill) {
+            const progress = run.shards > 0 && run.shards % 8 === 0 ? 8 : run.shards % 8;
+            missionFill.style.width = `${(progress / 8) * 100}%`;
+            missionFill.parentElement?.setAttribute("aria-valuenow", String(progress));
+            if (missionMeta) missionMeta.innerHTML = `<span>SHARDS ${String(progress).padStart(2, "0")} / 08</span><span>${8 - progress} LEFT</span>`;
+            if (missionDone) missionDone.hidden = !(run.shards > 0 && run.shards % 8 === 0);
+        }
+        if (chargeEl) { chargeEl.style.width = `${Math.min(100, run.charge)}%`; chargeEl.parentElement?.setAttribute("aria-valuenow", String(Math.floor(run.charge))); }
+        if (chargeLabelEl) chargeLabelEl.textContent = `${Math.floor(run.charge)}%`;
+        if (burstStateEl) burstStateEl.textContent = run.charge >= 100 ? "READY" : "CHARGING";
+        if (pulseButton) pulseButton.disabled = run.status !== "playing" || run.charge < 100;
+        if (runTimeEl) runTimeEl.textContent = clock(run.elapsed);
+        const multiplier = run.streak ? Math.min(5, 1 + Math.floor((run.streak - 1) / 3)) : 0;
+        if (streakEl) streakEl.textContent = `×${multiplier}`;
+        if (sideStreakEl) sideStreakEl.textContent = `×${multiplier}`;
+        if (flightStatusEl) flightStatusEl.textContent = run.status === "playing" ? "IN FLIGHT" : run.status.toUpperCase();
+        if (modeStatus) { modeStatus.textContent = run.status === "playing" ? "LIVE RUN" : run.status === "paused" ? "PAUSED" : "ARCADE"; modeStatus.classList.toggle("is-live", run.status === "playing"); }
+        if (pauseButton) { pauseButton.hidden = run.status === "ready" || run.status === "finished"; pauseButton.textContent = run.status === "paused" ? "▶" : "Ⅱ"; pauseButton.setAttribute("aria-label", run.status === "paused" ? "Resume game" : "Pause game"); }
+        if (overlay) { const visible = run.status !== "playing"; overlay.classList.toggle("active", visible); overlay.setAttribute("aria-hidden", String(!visible)); }
+        if (overlayKicker && overlayTitle && overlayCopy && overlayIcon && startButton) {
+            const content = {
+                ready: { kicker: "A NEW RUN AWAITS", title: "READY FOR LAUNCH", copy: "Thread the meteor belt, scoop up star shards, and charge a phase shield before the next wave hits.", icon: "✧", button: "Launch mission" },
+                paused: { kicker: "AUTOPILOT HOLD", title: "FLIGHT PAUSED", copy: "Your run is safe. Take a breath, then jump back into the asteroid field.", icon: "Ⅱ", button: "Resume flight" },
+                finished: { kicker: "FLIGHT REPORT", title: "SHIP LOST", copy: `You recovered ${run.shards} star shards and scored ${currentScore.toLocaleString()} points. Your best run is saved on this device.`, icon: "✦", button: "Fly again" },
+                playing: { kicker: "IN FLIGHT", title: "STARFALL RUN", copy: "Thread the meteor belt and bring the starlight home.", icon: "✧", button: "Flight underway" },
+            }[run.status];
+            overlayKicker.textContent = content.kicker; overlayTitle.textContent = content.title; overlayCopy.textContent = content.copy; overlayIcon.textContent = content.icon; startButton.innerHTML = `${content.button}<span aria-hidden="true">→</span>`;
+            if (controlHints) controlHints.hidden = run.status !== "ready";
+        }
+    }
+
+    function stopLoop() { if (loopId) cancelAnimationFrame(loopId); loopId = 0; previousFrame = 0; }
+    function startLoop() { if (loopId) return; previousFrame = 0; loopId = requestAnimationFrame(frame); }
+    function showToast(message) { if (!toast) return; toast.textContent = message; toast.classList.add("active"); window.clearTimeout(toastTimer); toastTimer = window.setTimeout(() => toast.classList.remove("active"), 1900); }
+    function setStatus(status) { run.status = status; if (status === "playing") startLoop(); else { stopLoop(); drawRun(ctx, run, performance.now()); } renderHud(); }
+    
+    function activatePulse() {
+        if (run.status !== "playing" || run.charge < 100) return;
+        run.charge = 0; run.shield = 3.2; burst(run, run.ship.x, run.ship.y, 190, 32);
+        audio?.play(780, "sine", 0.18, 0.07); showToast("PHASE SHIELD ONLINE"); renderHud();
+    }
+    function startRun() {
+        const bounds = arena.getBoundingClientRect(); run = createRun(bounds.width || run.width, bounds.height || run.height, run.best);
+        run.status = "playing"; keys.clear(); resizeCanvas(); audio?.play(520, "triangle", 0.13, 0.06); renderHud(); startLoop();
+    }
+    function togglePause() {
+        if (run.status === "playing") { keys.clear(); run.target = null; setStatus("paused"); audio?.play(330, "sine", 0.1, 0.04); }
+        else if (run.status === "paused") setStatus("playing");
+    }
+
+    function updateRun(dt) {
+        run.elapsed += dt; run.score += dt * (3 + Math.min(2, (run.sector - 1) * 0.25)); run.sector = 1 + Math.floor(run.elapsed / 18);
+        run.shield = Math.max(0, run.shield - dt); run.invulnerable = Math.max(0, run.invulnerable - dt); run.shake = Math.max(0, run.shake - dt);
+        const keyX = Number(keys.has("ArrowRight") || keys.has("KeyD")) - Number(keys.has("ArrowLeft") || keys.has("KeyA"));
+        const keyY = Number(keys.has("ArrowDown") || keys.has("KeyS")) - Number(keys.has("ArrowUp") || keys.has("KeyW"));
+        if (keyX || keyY) { const magnitude = Math.hypot(keyX, keyY) || 1; run.ship.x += (keyX / magnitude) * 268 * dt; run.ship.y += (keyY / magnitude) * 268 * dt; }
+        else if (run.target) {
+            const dx = run.target.x - run.ship.x, dy = run.target.y - run.ship.y, distance = Math.hypot(dx, dy);
+            if (distance > 3) { const amount = Math.min(distance, 320 * dt); run.ship.x += (dx / distance) * amount; run.ship.y += (dy / distance) * amount; }
+        }
+        run.ship.x = Math.max(20, Math.min(run.width - 20, run.ship.x)); run.ship.y = Math.max(20, Math.min(run.height - 20, run.ship.y));
+        const rockRate = Math.max(0.43, 1.2 - (run.sector - 1) * 0.085);
+        while (run.elapsed >= run.nextRock) {
+            const radius = rand(13, 25), x = rand(radius + 5, Math.max(radius + 6, run.width - radius - 5));
+            if (Math.hypot(x - run.ship.x, run.ship.y) > 145) {
+                run.rocks.push({ x, y: -radius, radius, speed: rand(105, 175) + (run.sector - 1) * 17, drift: rand(-45, 45), spin: rand(-1.8, 1.8), angle: rand(0, Math.PI * 2), seed: Math.random() * 12 });
+            }
+            run.nextRock += rockRate;
+        }
+        while (run.elapsed >= run.nextShard) { run.pickups.push({ x: rand(20, run.width - 20), y: -18, radius: 9, speed: rand(92, 132) + (run.sector - 1) * 8, phase: rand(0, Math.PI * 2), kind: "shard" }); run.nextShard += rand(1.8, 2.7); }
+        while (run.elapsed >= run.nextCell) { run.pickups.push({ x: rand(24, run.width - 24), y: -20, radius: 12, speed: 92 + (run.sector - 1) * 6, phase: rand(0, Math.PI * 2), kind: "cell" }); run.nextCell += 16; }
+        run.rocks = run.rocks.filter((rock) => { rock.y += rock.speed * dt; rock.x += rock.drift * dt; rock.angle += rock.spin * dt; return rock.y < run.height + rock.radius + 24; });
+        run.pickups = run.pickups.filter((item) => { item.y += item.speed * dt; item.phase += dt * 2.4; return item.y < run.height + item.radius + 20; });
+        for (let i = run.pickups.length - 1; i >= 0; i--) {
+            const item = run.pickups[i]; if (Math.hypot(item.x - run.ship.x, item.y - run.ship.y) >= item.radius + 19) continue;
+            if (item.kind === "shard") {
+                run.streak = run.elapsed - run.lastShardAt < 3.8 ? run.streak + 1 : 1; run.lastShardAt = run.elapsed;
+                const multiplier = Math.min(5, 1 + Math.floor((run.streak - 1) / 3));
+                run.score += 90 * multiplier; run.charge = Math.min(100, run.charge + 18); run.shards++;
+                audio?.play(700 + multiplier * 35, "triangle", 0.08, 0.04); burst(run, item.x, item.y, 190, 17);
+                if (run.shards % 5 === 0) addXP(8);
+                if (run.shards % 8 === 0) { run.score += 250; run.charge = Math.min(100, run.charge + 12); addXP(15); showToast("SECTOR BONUS SECURED  +250"); }
+            } else {
+                run.charge = Math.min(100, run.charge + 45);
+                if (run.lives < 3) { run.lives++; showToast("HULL REPAIRED"); } else { run.score += 80; showToast("ENERGY CELL  +80"); }
+                burst(run, item.x, item.y, 155, 22); audio?.play(560, "sine", 0.12, 0.05);
+            }
+            run.pickups.splice(i, 1);
+        }
+        for (let i = run.rocks.length - 1; i >= 0; i--) {
+            const rock = run.rocks[i]; if (Math.hypot(rock.x - run.ship.x, rock.y - run.ship.y) >= rock.radius + 19) continue;
+            if (run.shield > 0) { burst(run, rock.x, rock.y, 188, 20); run.score += 24; run.rocks.splice(i, 1); continue; }
+            if (run.invulnerable > 0) continue;
+            run.lives--; run.streak = 0; run.invulnerable = 1.25; run.shake = 0.22;
+            burst(run, run.ship.x, run.ship.y, 348, 20); run.rocks.splice(i, 1); audio?.error();
+            if (run.lives <= 0) finishRun();
+        }
+        run.sparks = run.sparks.filter((spark) => { spark.x += spark.vx * dt; spark.y += spark.vy * dt; spark.vx *= Math.pow(0.1, dt); spark.vy *= Math.pow(0.1, dt); spark.life -= dt; return spark.life > 0; });
+        run.stars.forEach((star) => { star.y += star.speed * dt; if (star.y > run.height) { star.y = -3; star.x = Math.random() * run.width; } star.phase += dt * (0.8 + star.speed / 24); });
+        if (run.elapsed - run.lastShardAt > 3.8) run.streak = 0;
+        if (Math.floor(run.score) > run.best) run.best = Math.floor(run.score);
+    }
+
+    function finishRun() {
+        if (run.status === "finished") return;
+        run.status = "finished"; run.best = Math.max(run.best, Math.floor(run.score)); saveBest(run.best);
+        if (run.score > 0) addXP(Math.max(2, Math.floor(run.score / 600))); audio?.error();
+    }
+    function frame(timestamp) {
+        loopId = 0; if (run.status !== "playing") return;
+        const dt = previousFrame ? Math.min((timestamp - previousFrame) / 1000, 0.035) : 0; previousFrame = timestamp;
+        updateRun(dt); drawRun(ctx, run, timestamp);
+        if (timestamp - lastHudUpdate > 120 || run.status !== "playing") { renderHud(); lastHudUpdate = timestamp; }
+        if (run.status === "playing") loopId = requestAnimationFrame(frame); else { stopLoop(); renderHud(); }
+    }
+    function showPanel() {
+        lastFocusedElement = document.activeElement;
+        panel.classList.add("active"); backdrop.classList.add("active");
+        panel.setAttribute("aria-hidden", "false"); backdrop.setAttribute("aria-hidden", "false");
+        audio?.click();
+        window.setTimeout(() => { resizeCanvas(); renderHud(); closeButton.focus(); }, 180);
+        if (run.status === "playing") setStatus("paused");
+    }
+    function hidePanel() {
+        if (run.status === "playing") setStatus("paused"); saveBest(run.best);
+        panel.classList.remove("active"); backdrop.classList.remove("active");
+        panel.setAttribute("aria-hidden", "true"); backdrop.setAttribute("aria-hidden", "true");
+        keys.clear(); run.target = null;
+        if (lastFocusedElement instanceof HTMLElement) lastFocusedElement.focus(); else openButton.focus();
+    }
+    function pointFromEvent(event) { const rect = canvas.getBoundingClientRect(); run.target = { x: event.clientX - rect.left, y: event.clientY - rect.top }; }
+    function onPointerDown(event) { if (run.status !== "playing") return; pointerId = event.pointerId; canvas.setPointerCapture(event.pointerId); pointFromEvent(event); }
+    function onPointerMove(event) { if (pointerId === event.pointerId && run.status === "playing") pointFromEvent(event); }
+    function onPointerUp(event) { if (pointerId !== event.pointerId) return; pointerId = null; run.target = null; }
+    function onKeyDown(event) {
+        const target = event.target;
+        const typing = target instanceof HTMLElement && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+        if (typing || !panel.classList.contains("active")) return;
+        if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.code) && run.status === "playing") { event.preventDefault(); keys.add(event.code); }
+        else if (["KeyW", "KeyA", "KeyS", "KeyD"].includes(event.code)) keys.add(event.code);
+        else if (!event.repeat && (event.code === "Space" || event.code === "KeyE")) { if (run.status === "playing") { event.preventDefault(); activatePulse(); } }
+        else if (!event.repeat && event.code === "KeyP") togglePause();
+        else if (!event.repeat && event.code === "Escape") hidePanel();
+    }
+    function onKeyUp(event) { keys.delete(event.code); }
+    function onWindowBlur() { keys.clear(); if (run.status === "playing") setStatus("paused"); }
+
+    openButton.addEventListener("click", showPanel); closeButton.addEventListener("click", hidePanel); backdrop.addEventListener("click", hidePanel);
+    startButton?.addEventListener("click", () => { if (run.status === "paused") setStatus("playing"); else startRun(); });
+    pauseButton?.addEventListener("click", togglePause); pulseButton?.addEventListener("click", activatePulse);
+    canvas.addEventListener("pointerdown", onPointerDown); canvas.addEventListener("pointermove", onPointerMove); canvas.addEventListener("pointerup", onPointerUp); canvas.addEventListener("pointercancel", onPointerUp);
+    window.addEventListener("resize", resizeCanvas); window.addEventListener("keydown", onKeyDown); window.addEventListener("keyup", onKeyUp); window.addEventListener("blur", onWindowBlur);
+    window.addEventListener("pagehide", () => saveBest(run.best));
+    if ("ResizeObserver" in window) { const observer = new ResizeObserver(resizeCanvas); observer.observe(arena); }
+    renderHud(); resizeCanvas();
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  DAILY PLANET & ABOUT PAGE
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const DAILY_PLANET_STORAGE_KEY = "spacefarer-daily-planet";
+function getLocalDateKey(date = new Date()) { const year = date.getFullYear(); const month = String(date.getMonth() + 1).padStart(2, "0"); const day = String(date.getDate()).padStart(2, "0"); return `${year}-${month}-${day}`; }
+function getDailyPlanetIndex() {
+    const todayKey = getLocalDateKey();
+    const savedDate = localStorage.getItem(`${DAILY_PLANET_STORAGE_KEY}:date`);
+    const savedIndex = Number(localStorage.getItem(`${DAILY_PLANET_STORAGE_KEY}:index`));
+    if (savedDate === todayKey && Number.isInteger(savedIndex) && savedIndex >= 0 && savedIndex < PLANETS.length) return savedIndex;
+    const randomIndex = Math.floor(Math.random() * PLANETS.length);
+    localStorage.setItem(`${DAILY_PLANET_STORAGE_KEY}:date`, todayKey); localStorage.setItem(`${DAILY_PLANET_STORAGE_KEY}:index`, String(randomIndex));
+    return randomIndex;
+}
+let dailyPlanetIndex = getDailyPlanetIndex();
+const aboutPage = document.getElementById("about-page"), aboutButton = document.getElementById("about-btn"), aboutBackButton = document.getElementById("about-back-button"), appEl = document.getElementById("app"), todayPanelButton = document.getElementById("today-panel-button"), updatePanelButton = document.getElementById("update-panel-button"), todayPanelContent = document.getElementById("today-panel-content"), updatePanelContent = document.getElementById("update-panel-content");
+
+function showSpacefarerPanel(view) {
+    const showToday = view === "today";
+    todayPanelContent.hidden = !showToday; updatePanelContent.hidden = showToday;
+    todayPanelButton.setAttribute("aria-pressed", String(showToday)); updatePanelButton.setAttribute("aria-pressed", String(!showToday));
+}
+function renderDailyPlanet() {
+    const planet = PLANETS[dailyPlanetIndex];
+    document.getElementById("today-planet-name").textContent = `${planet.symbol} ${planet.name}`;
+    document.getElementById("today-planet-tagline").textContent = planet.tagline;
+    document.getElementById("today-planet-fact").textContent = planet.fact;
+}
+function scheduleDailyPlanetRefresh() {
+    const now = new Date(), nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime();
+    window.setTimeout(() => { dailyPlanetIndex = getDailyPlanetIndex(); renderDailyPlanet(); scheduleDailyPlanetRefresh(); }, nextMidnight - now.getTime());
+}
+todayPanelButton.addEventListener("click", () => showSpacefarerPanel("today"));
+updatePanelButton.addEventListener("click", () => showSpacefarerPanel("update"));
+
+function getAboutRoutes(pathname) {
+    const normalizedPath = pathname.replace(/\/+$/, "") || "/";
+    const basePath = normalizedPath.endsWith("/about") ? normalizedPath.slice(0, -"/about".length) || "/" : normalizedPath;
+    const homePath = basePath === "/" ? "/" : `${basePath.replace(/\/+$/, "")}/`;
+    const aboutPath = homePath === "/" ? "/about" : `${homePath}about`;
+    return { homePath, aboutPath };
+}
+const aboutRoutes = getAboutRoutes(window.location.pathname);
+function isAboutRoute() { const currentPath = window.location.pathname.replace(/\/+$/, "") || "/"; return currentPath === aboutRoutes.aboutPath.replace(/\/+$/, ""); }
+function setAboutPageVisible(visible) {
+    aboutPage.hidden = !visible; aboutPage.setAttribute("aria-hidden", String(!visible));
+    document.body.classList.toggle("about-open", visible); appEl.inert = visible;
+    if (visible) aboutBackButton.focus(); else aboutButton.focus();
+}
+function openAboutPage() {
+    audio.click();
+    if (!isAboutRoute()) window.history.pushState({ spacefarerPage: "about" }, "", aboutRoutes.aboutPath);
+    setAboutPageVisible(true);
+}
+function closeAboutPage() {
+    if (isAboutRoute() && window.history.state?.spacefarerPage === "about") { window.history.back(); return; }
+    if (isAboutRoute()) window.history.replaceState({}, "", aboutRoutes.homePath);
+    setAboutPageVisible(false);
+}
+aboutButton.addEventListener("click", openAboutPage); aboutBackButton.addEventListener("click", closeAboutPage);
+window.addEventListener("popstate", () => setAboutPageVisible(isAboutRoute()));
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  QUVIX AI
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+(function initQuvixAI() {
+    const panel = document.getElementById("quvix-panel"), btn = document.getElementById("quvix-btn"), closeBtn = document.getElementById("qv-close"), chatEl = document.getElementById("qv-chat"), inputEl = document.getElementById("qv-input"), sendBtn = document.getElementById("qv-send"), welcomeEl = document.getElementById("qv-welcome");
+    let busy = false, firstMessage = true;
+    const STOP_WORDS = ["a","an","the","is","are","am","was","were","i","me","my","mine","you","your","yours","he","she","it","they","them","their","we","our","ours","to","of","for","from","on","in","at","by","with","can","could","would","should","do","does","did","what","who","when","where","why","how","please","tell","say","about","explain"];
+    function randomResponse(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+    function now() { return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }
+    const intents = [
+        { name: "greeting", phrases: ["good morning","good afternoon","good evening","helloing"], keywords: ["hello","hi","hey","greetings"], responses: ["Hello! 👋", "Hi there! 😊", "Hey! How can I help?"] },
+        { name: "how_are_you", phrases: ["how are you","how are u","how r u","how's it going"], keywords: ["feel"], responses: ["I'm doing great! Thanks for asking! 😊","I'm doing well! How about you?","Everything's going great!"] },
+        { name: "black_hole", phrases: ["what is a black hole", "tell me about black holes"], keywords: ["black hole", "singularity", "event horizon"], responses: ["A black hole is a region of spacetime where gravity is so strong that nothing – not even light – can escape. 🕳️", "Black holes form when massive stars collapse under their own gravity. The boundary around them is called the event horizon.", "At the center of a black hole lies the singularity, where our understanding of physics breaks down."] },
+        { name: "universe", phrases: ["how big is the universe", "what is the universe"], keywords: ["universe", "cosmos"], responses: ["The observable universe is about 93 billion light-years in diameter. 🌌", "The universe contains an estimated 2 trillion galaxies, each with billions of stars.", "The universe is expanding – and it's accelerating! We don't fully understand why yet."] },
+        { name: "supernova", phrases: ["what is a supernova", "tell me about supernovas"], keywords: ["supernova", "supernovas", "explosion"], responses: ["A supernova is a massive star explosion that outshines entire galaxies for a short time! 💥", "Supernovas create the heavy elements in the universe we're literally made of stardust.", "The last supernova visible to the naked eye was in 1604 – Kepler's Supernova."] },
+        { name: "exoplanet", phrases: ["what are exoplanets", "tell me about exoplanets", "what is an exoplanet"], keywords: ["exoplanet", "exoplanets", "alien"], responses: ["Exoplanets are planets that orbit stars outside our solar system. Over 5,000 have been discovered! 🌍", "Some exoplanets are in the 'habitable zone' – the perfect distance from their star for liquid water.", "The James Webb Space Telescope is studying exoplanet atmospheres for signs of life."] },
+        { name: "solar_system", phrases: ["what is the solar system", "tell me about the solar system"], keywords: ["solar system"], responses: ["The solar system is the Sun and everything bound to it by gravity — planets, moons, asteroids, comets, and more. ☀️", "Our solar system has 8 planets: Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, and Neptune.", "Beyond Neptune, there's the Kuiper Belt and the distant Oort Cloud."] },
+        { name: "sun", phrases: ["what is the sun", "tell me about the sun"], keywords: ["sun", "solar"], responses: ["The Sun is a G-type main-sequence star at the center of our solar system. ☀️", "The Sun contains about 99.86% of the mass of the entire solar system.", "Its core fuses hydrogen into helium, releasing the energy that supports life on Earth."] },
+        { name: "moon", phrases: ["what is the moon", "tell me about the moon"], keywords: ["moon", "luna"], responses: ["The Moon is Earth's only natural satellite. 🌕", "The Moon causes ocean tides and stabilizes Earth's tilt.", "It's about 384,400 km away and always shows us the same face."] },
+        { name: "mercury", phrases: ["what is mercury", "tell me about mercury"], keywords: ["mercury"], responses: ["Mercury is the smallest planet in our solar system and closest to the Sun. 🌑", "A day on Mercury lasts about 59 Earth days, but a year is only 88 Earth days!", "Mercury has extreme temperatures — scorching hot in daylight and freezing at night."] },
+        { name: "venus", phrases: ["what is venus", "tell me about venus"], keywords: ["venus"], responses: ["Venus is the second planet from the Sun and the hottest planet in our solar system. 🔥", "Venus has a thick carbon dioxide atmosphere and clouds of sulfuric acid.", "It's often called Earth's sister planet because of its similar size."] },
+        { name: "earth", phrases: ["what is earth", "tell me about earth"], keywords: ["earth"], responses: ["Earth is the third planet from the Sun and the only known world with life. 🌍", "About 71% of Earth's surface is covered with water.", "Earth has one large moon and a protective magnetic field."] },
+        { name: "mars", phrases: ["what is mars", "tell me about mars"], keywords: ["mars", "red planet"], responses: ["Mars is the fourth planet from the Sun and is known as the Red Planet. 🔴", "Mars has the largest volcano in the solar system, Olympus Mons.", "Scientists are exploring Mars for signs of ancient life and future human missions."] },
+        { name: "jupiter", phrases: ["what is jupiter", "tell me about jupiter"], keywords: ["jupiter"], responses: ["Jupiter is the largest planet in our solar system. 🪐", "Jupiter's Great Red Spot is a giant storm bigger than Earth.", "It has dozens of moons, including Ganymede, the largest moon in the solar system."] },
+        { name: "saturn", phrases: ["tell me about saturn", "what is saturn"], keywords: ["saturn", "rings"], responses: ["Saturn is the sixth planet from the Sun and is famous for its beautiful ring system made of ice and rock. 🪐", "Saturn is a gas giant, mostly hydrogen and helium, and has at least 146 known moons!", "Saturn's rings span over 280,000 km but are only about 10 meters thick."] },
+        { name: "uranus", phrases: ["what is uranus", "tell me about uranus"], keywords: ["uranus"], responses: ["Uranus is the seventh planet from the Sun and an ice giant. 🧊", "Uranus rotates on its side, likely because of a massive ancient collision.", "It has faint rings and a blue-green color from methane in its atmosphere."] },
+        { name: "neptune", phrases: ["what is neptune", "tell me about neptune"], keywords: ["neptune"], responses: ["Neptune is the eighth planet from the Sun and the farthest known planet. 🔵", "Neptune has the fastest winds in the solar system, over 2,000 km/h.", "It was discovered through mathematical predictions before being seen through a telescope."] },
+        { name: "pluto", phrases: ["what is pluto", "tell me about pluto"], keywords: ["pluto", "dwarf planet"], responses: ["Pluto is a dwarf planet in the Kuiper Belt. ❄️", "Pluto was considered the ninth planet until 2006, when it was reclassified as a dwarf planet.", "NASA's New Horizons flew past Pluto in 2015, revealing mountains and ice plains."] },
+        { name: "asteroid", phrases: ["what is an asteroid", "tell me about asteroids"], keywords: ["asteroid", "asteroids"], responses: ["Asteroids are rocky remnants left over from the early formation of the solar system. ☄️", "Most asteroids live in the Asteroid Belt between Mars and Jupiter.", "Some asteroids are so large they have their own moons!"] },
+        { name: "comet", phrases: ["what is a comet", "tell me about comets"], keywords: ["comet", "comets"], responses: ["A comet is an icy body that releases gas and dust as it approaches the Sun. ☄️", "Comets often grow a glowing coma and a long tail pointing away from the Sun.", "Some comets return periodically, like Halley's Comet every 76 years."] },
+        { name: "galaxy", phrases: ["what is a galaxy", "tell me about galaxies"], keywords: ["galaxy", "galaxies"], responses: ["A galaxy is a huge collection of stars, gas, dust, and dark matter held together by gravity. 🌌", "There are billions of galaxies in the observable universe.", "Galaxies come in shapes like spiral, elliptical, and irregular."] },
+        { name: "milky_way", phrases: ["what is the milky way", "tell me about the milky way"], keywords: ["milky way"], responses: ["The Milky Way is the galaxy that contains our solar system. 🌌", "It's a barred spiral galaxy about 100,000 light-years across.", "The Milky Way contains hundreds of billions of stars."] },
+        { name: "nebula", phrases: ["what is a nebula", "tell me about nebulas"], keywords: ["nebula", "nebulas"], responses: ["A nebula is a giant cloud of gas and dust in space. ☁️", "Some nebulas are star nurseries where new stars are born.", "Others are formed when dying stars shed their outer layers."] },
+        { name: "star", phrases: ["what is a star", "tell me about stars"], keywords: ["star", "stars", "fusion"], responses: ["A star is a massive ball of plasma that shines through nuclear fusion. ⭐", "Stars are born in nebulas and spend most of their lives fusing hydrogen into helium.", "The closest star to Earth is the Sun, about 93 million miles away."] },
+        { name: "big_bang", phrases: ["what is the big bang", "tell me about the big bang"], keywords: ["big bang"], responses: ["The Big Bang is the leading theory for how the universe began about 13.8 billion years ago. 💥", "It wasn't an explosion in space — it was the expansion of space itself.", "Evidence includes cosmic microwave background radiation and the movement of galaxies."] },
+        { name: "dark_matter", phrases: ["what is dark matter", "tell me about dark matter"], keywords: ["dark matter"], responses: ["Dark matter is mysterious matter that doesn't emit light, but affects gravity. 🌑", "We can't see it directly, but its gravity holds galaxies together.", "Dark matter makes up about 27% of the universe."] },
+        { name: "dark_energy", phrases: ["what is dark energy", "tell me about dark energy"], keywords: ["dark energy"], responses: ["Dark energy is a mysterious force causing the universe's expansion to accelerate. 🌌", "It makes up about 68% of the universe.", "Nobody knows exactly what dark energy is — it's one of the biggest mysteries in physics."] },
+        { name: "light_year", phrases: ["what is a light year", "tell me about light years"], keywords: ["light year", "light years"], responses: ["A light-year is the distance light travels in one year — about 9.46 trillion km. 💫", "It measures distance, not time.", "Proxima Centauri, the nearest star after the Sun, is about 4.24 light-years away."] },
+        { name: "james_webb", phrases: ["what is the james webb telescope", "tell me about james webb"], keywords: ["james webb", "jwst"], responses: ["The James Webb Space Telescope is the most powerful space telescope ever launched. 🔭", "It observes infrared light to study the early universe, exoplanets, and star formation.", "JWST launched in December 2021 and orbits the Sun about 1.5 million km from Earth."] },
+        { name: "iss", phrases: ["what is the iss", "tell me about the international space station"], keywords: ["iss", "space station", "international space station"], responses: ["The International Space Station is a habitable laboratory orbiting Earth. 🛰️", "It orbits about 400 km above Earth and completes an orbit every 90 minutes.", "Astronauts live and work there conducting science experiments in microgravity."] },
+        { name: "astronaut", phrases: ["what is an astronaut", "tell me about astronauts"], keywords: ["astronaut", "astronauts", "cosmonaut"], responses: ["An astronaut is a person trained to travel and work in space. 👩‍🚀", "Astronauts train for years in simulators, underwater, and in extreme environments.", "They experience microgravity, which makes everyday tasks very different."] },
+        { name: "gravity", phrases: ["what is gravity", "tell me about gravity"], keywords: ["gravity"], responses: ["Gravity is the force that attracts objects with mass toward each other. 🌍", "It keeps planets in orbit, stars together, and galaxies bound.", "Einstein described gravity as the bending of spacetime."] },
+        { name: "eclipse", phrases: ["what is an eclipse", "tell me about eclipses"], keywords: ["eclipse", "solar eclipse", "lunar eclipse"], responses: ["An eclipse happens when one celestial body blocks the light of another. 🌒", "A solar eclipse occurs when the Moon blocks the Sun.", "A lunar eclipse occurs when Earth's shadow falls on the Moon."] },
+        { name: "aurora", phrases: ["what is an aurora", "tell me about auroras"], keywords: ["aurora", "auroras", "northern lights", "southern lights"], responses: ["Auroras are colorful lights in the sky caused by solar particles hitting Earth's atmosphere. 🌌", "In the north they're called aurora borealis, and in the south aurora australis.", "They glow green, red, purple, and blue depending on the gas and altitude."] }
+    ];
+
+    function normalize(text) { return text.toLowerCase().replace(/[^\w\s]/g, "").replace(/\s+/g, " ").trim(); }
+    function levenshtein(a, b) { const m = a.length, n = b.length; if (m === 0) return n; if (n === 0) return m; const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0)); for (let i = 0; i <= m; i++) dp[i][0] = i; for (let j = 0; j <= n; j++) dp[0][j] = j; for (let i = 1; i <= m; i++) { for (let j = 1; j <= n; j++) { const cost = a[i - 1] === b[j - 1] ? 0 : 1; dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost); } } return dp[m][n]; }
+    function similarity(a, b) { if (!a.length || !b.length) return 0; return 1 - levenshtein(a, b) / Math.max(a.length, b.length); }
+    const SIMILARITY_THRESHOLD = 0.65, MIN_SCORE = 2.0;
+    function scoreIntent(intent, userInput) {
+        const text = normalize(userInput), inputWords = text.split(" ").filter(Boolean); let score = 0;
+        for (const phrase of intent.phrases || []) { const p = normalize(phrase); if (text === p) score += 10; else if (text.includes(p)) score += 6; else { const pWords = p.split(" "); const matches = pWords.filter(pw => inputWords.some(iw => similarity(iw, pw) >= SIMILARITY_THRESHOLD)).length; if (pWords.length) score += (matches / pWords.length) * 4; } }
+        for (const keyword of intent.keywords || []) { const k = normalize(keyword); if (!k) continue; if (text.includes(k)) { score += k.includes(" ") ? 5 : 3; } else { const kW = k.split(" "); const matches = kW.filter(kw => inputWords.some(iw => similarity(iw, kw) >= SIMILARITY_THRESHOLD)).length; if (kW.length) score += (matches / kW.length) * 2; } }
+        const targetWords = new Set([...(intent.phrases || []).flatMap(p => normalize(p).split(" ")), ...(intent.keywords || []).flatMap(k => normalize(k).split(" "))]);
+        const meaningfulInput = inputWords.filter(w => !STOP_WORDS.includes(w));
+        score += meaningfulInput.filter(w => targetWords.has(w)).length * 0.5; return score;
+    }
+    function getResponse(message) {
+        const text = normalize(message); if (!text) return "Say something and I'll do my best! 🚀";
+        let bestIntent = null, bestScore = 0; for (const intent of intents) { const s = scoreIntent(intent, message); if (s > bestScore) { bestScore = s; bestIntent = intent; } }
+        if (!bestIntent || bestScore < MIN_SCORE) return "Hmm, I'm not sure about that one. Try asking about black holes, Saturn, supernovas, exoplanets, or any planet! 🚀";
+        return randomResponse(bestIntent.responses);
+    }
+    function addMsg(text, type) {
+        if (type === "user" && firstMessage && welcomeEl) { welcomeEl.remove(); firstMessage = false; }
+        const wrap = document.createElement("div"); wrap.className = "qv-msg-wrap qv-" + type;
+        if (type === "ai") { const avatar = document.createElement("div"); avatar.className = "qv-avatar"; avatar.textContent = "AI"; wrap.appendChild(avatar); }
+        const content = document.createElement("div"); content.className = "qv-msg-content";
+        const bubble = document.createElement("div"); bubble.className = "qv-bubble qv-" + type; bubble.textContent = text; bubble.innerHTML = bubble.innerHTML.replace(/\n/g, "<br>");
+        const ts = document.createElement("div"); ts.className = "qv-ts"; ts.textContent = now();
+        content.appendChild(bubble); content.appendChild(ts); wrap.appendChild(content); chatEl.appendChild(wrap); chatEl.scrollTop = chatEl.scrollHeight;
+    }
+    function showTyping() {
+        document.getElementById("qv-typing")?.remove();
+        const wrap = document.createElement("div"); wrap.className = "qv-msg-wrap qv-ai"; wrap.id = "qv-typing";
+        wrap.innerHTML = `<div class="qv-avatar">AI</div><div class="qv-msg-content"><div class="qv-bubble qv-ai qv-typing-bub"><span class="qv-dot"></span><span class="qv-dot"></span><span class="qv-dot"></span></div></div>`;
+        chatEl.appendChild(wrap); chatEl.scrollTop = chatEl.scrollHeight;
+    }
+    function hideTyping() { document.getElementById("qv-typing")?.remove(); }
+    function send() {
+        const text = inputEl.value.trim(); if (!text || busy) return;
+        if (text.toLowerCase() === "delete") { chatEl.innerHTML = `<div id="qv-welcome"><h1>Helper</h1><p>Ask me anything about space!</p></div>`; firstMessage = true; inputEl.value = ""; return; }
+        addMsg(text, "user"); inputEl.value = ""; busy = true; sendBtn.disabled = true; showTyping();
+        setTimeout(() => { hideTyping(); addMsg(getResponse(text), "ai"); busy = false; sendBtn.disabled = false; inputEl.focus(); }, 500 + Math.random() * 500);
+    }
+    function openPanel() { panel.classList.add("active"); btn.classList.add("open"); setTimeout(() => inputEl.focus(), 300); if (typeof audio !== "undefined" && audio.play) audio.play(660, "sine", 0.08, 0.04); }
+    function closePanel() { panel.classList.remove("active"); btn.classList.remove("open"); }
+    function togglePanel() { if (panel.classList.contains("active")) closePanel(); else openPanel(); }
+    window.quvixUseCmd = function (cmd) { inputEl.value = cmd; inputEl.focus(); };
+    window.quvixOpen = openPanel; window.quvixClose = closePanel; window.quvixToggle = togglePanel;
+    btn.addEventListener("click", togglePanel); closeBtn.addEventListener("click", closePanel); sendBtn.addEventListener("click", send);
+    inputEl.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); send(); } });
+})();
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  MUSIC
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const music = document.getElementById("bgMusic"), musicBtn = document.getElementById("musicBtn");
+if (music && musicBtn) {
+    music.addEventListener("error", () => { console.error("🎵 MUSIC ERROR:", music.error); musicBtn.textContent = "⚠️ Music"; musicBtn.classList.remove("playing"); });
+    musicBtn.addEventListener("click", () => {
+        if (music.paused) {
+            music.play().then(() => { musicBtn.textContent = "🔇 Mute"; musicBtn.classList.add("playing"); }).catch((err) => { musicBtn.textContent = "🎵 Music"; musicBtn.classList.remove("playing"); });
+        } else { music.pause(); musicBtn.textContent = "🎵 Music"; musicBtn.classList.remove("playing"); }
+    });
+    document.addEventListener('click', function firstClick(e) {
+        if (e.target.closest('#musicBtn')) { document.removeEventListener('click', firstClick); return; }
+        if (music.paused) { music.play().then(() => { musicBtn.textContent = "🔇 Mute"; musicBtn.classList.add("playing"); }).catch((err) => {}); }
+        document.removeEventListener('click', firstClick);
+    }, { once: true });
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  INIT ALL
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+window.addEventListener('DOMContentLoaded', () => {
+    resizeCanvas();
+    animateStars();
+    initNav();
+    updateXPUI();
+    initStarfallRun({ audio, addXP });
+    renderDailyPlanet();
+    showSpacefarerPanel("today");
+    scheduleDailyPlanetRefresh();
+    if (isAboutRoute()) setAboutPageVisible(true);
+});
+window.selectPlanet = selectPlanet;
